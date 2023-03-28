@@ -1,10 +1,10 @@
 __pycache__/
 *.pyc
-epy_reader.egg-info/*
 .venv
 .idea
 dist
 tmp/
+writable/**
 .coverage
 
 build/**
