@@ -1,0 +1,13 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}500 &mdash; Kesalahan Server{% endblock %}
+{% else %}
+<title>500 &mdash; Kesalahan Server</title>
+{% endif %}
+
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="display-1 fw-bold">500</h1>
+  <p class="lead">Terjadi kesalahan pada server. Silakan coba lagi nanti.</p>
+</div>
+{% endblock %}

@@ -65,9 +65,10 @@ def class_owned_required(view):
     @functools.wraps(view)
     def wrapped(student_id, **kwargs):
         if current_user.role == "wali_kelas":
+            from . import db
             from .models import Student
 
-            s = Student.query.get_or_404(student_id)
+            s = db.get_or_404(Student, student_id)
             if s.class_.homeroom_teacher_id != current_user.id:
                 return hx_render("errors/403.html"), 403
         return view(student_id=student_id, **kwargs)

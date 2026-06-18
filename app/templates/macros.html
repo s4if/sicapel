@@ -1,0 +1,17 @@
+{% macro render_notif(error, success, info) %}
+  {% if error %}<div class="alert alert-warning alert-dismissible fade show" role="alert">{{ error }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endif %}
+  {% if success %}<div class="alert alert-success alert-dismissible fade show" role="alert">{{ success }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endif %}
+  {% if info %}<div class="alert alert-primary alert-dismissible fade show" role="alert">{{ info }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endif %}
+{% endmacro %}
+
+{% macro render_field(field, label_text=None, required=False, base_class='form-control', extra_class='') %}
+<div class="mb-3">
+    {% if label_text %}{{ field.label(class='form-label', text=label_text) }}{% else %}{{ field.label(class='form-label') }}{% endif %}
+    {{ field(class=base_class ~ (' is-invalid' if field.errors else '') ~ (' ' ~ extra_class if extra_class else ''), required=required, **kwargs) }}
+    {% if field.errors %}
+    <div class="invalid-feedback">
+        {% for error in field.errors %}{{ error }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}

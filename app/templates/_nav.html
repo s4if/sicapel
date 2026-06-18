@@ -1,0 +1,69 @@
+{# Role-aware navigation partial (R6: every link carries href + hx-get).
+   Included by base.html. Relies on current_user injected by hx_render. #}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('dashboard.index') }}"
+       hx-get="{{ url_for('dashboard.index') }}">SICAPEL</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false"
+            aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav" hx-target="#hx_content" hx-swap="innerHTML">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('dashboard.index') }}"
+             hx-get="{{ url_for('dashboard.index') }}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('violations.index') }}"
+             hx-get="{{ url_for('violations.index') }}">Pelanggaran</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('students.index') }}"
+             hx-get="{{ url_for('students.index') }}">Siswa</a>
+        </li>
+        {% if current_user.role in ('admin', 'guru_bk') %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('warnings.index') }}"
+             hx-get="{{ url_for('warnings.index') }}">Surat Peringatan</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('amnesties.index') }}"
+             hx-get="{{ url_for('amnesties.index') }}">Pemutihan</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('expulsion.index') }}"
+             hx-get="{{ url_for('expulsion.index') }}">Ekspulsi</a>
+        </li>
+        {% endif %}
+        {% if current_user.role == 'admin' %}
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button"
+             data-bs-toggle="dropdown" aria-expanded="false">Administrasi</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('classes.index') }}"
+                   hx-get="{{ url_for('classes.index') }}">Kelas</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('users.index') }}"
+                   hx-get="{{ url_for('users.index') }}">Pengguna</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('violation_types.index') }}"
+                   hx-get="{{ url_for('violation_types.index') }}">Jenis Pelanggaran</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('academic_years.index') }}"
+                   hx-get="{{ url_for('academic_years.index') }}">Tahun Ajaran</a></li>
+          </ul>
+        </li>
+        {% endif %}
+      </ul>
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <span class="navbar-text text-light me-3">
+            {{ current_user.name }} <span class="badge bg-secondary">{{ current_user.role }}</span>
+          </span>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('auth.logout') }}" hx-boost="false">Logout</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
