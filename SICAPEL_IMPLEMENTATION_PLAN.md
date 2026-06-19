@@ -101,7 +101,9 @@ Point accumulation alone (>200) **never** triggers expulsion.
 ### 1.7 Letter Numbering
 
 Format: `{seq:03d}/<TYPE>/BK/{year}` (e.g. `001/SP1/BK/2026`).
-`letter_seq` resets per academic year. Allocation must be concurrency-safe (see §8.3).
+`letter_seq` resets per academic year. Allocation uses the optimistic
+MAX+1 pattern with the `UNIQUE(academic_year_id, letter_seq)` constraint
+as the concurrency backstop (see §8.3).
 
 ### 1.8 Dashboard Monitoring
 
@@ -663,10 +665,19 @@ def apply_amnesty(*, student_id, points_reduced, sp_reset, reason,
 
 ```python
 def next_letter_seq(model, academic_year_id, session) -> int:
-    """Concurrency-safe letter_seq allocation.
-    PostgreSQL: SELECT ... FOR UPDATE within the transaction.
-    SQLite: BEGIN IMMEDIATE.
-    Pattern: COALESCE(MAX(letter_seq), 0) + 1."""
+    """Optimistic letter_seq allocation.
+    Pattern: COALESCE(MAX(letter_seq), 0) + 1, evaluated within the
+    caller's open transaction (no SELECT ... FOR UPDATE, no BEGIN
+    IMMEDIATE).
+
+    Concurrency safety comes from the UNIQUE(academic_year_id, letter_seq)
+    constraint on every letter table (§2.13), not from row locking. Two
+    concurrent allocations that race on the same MAX(seq) will both pick
+    the same value; exactly one survives COMMIT and the other raises
+    IntegrityError and rolls back. For v1 (a handful of Guru BK users)
+    a rare simultaneous collision is acceptable — the transaction simply
+    rolls back and the error surfaces to the user, who retries. No
+    automatic retry layer is added in v1."""
 ```
 
 ### 8.4 `recompute_summary`
@@ -1010,7 +1021,21 @@ Must cover **7 branches** of the SP escalation logic (§1.4):
 
 ### 13.4 `test_letter_numbering.py`
 
-Concurrent inserts via `threading.Thread`; assert no duplicate `letter_seq` per academic year.
+Deterministic, single-threaded tests (no `threading` — in-memory SQLite is
+per-connection and cannot reliably exercise real concurrency). Cases:
+
+1. First allocation for an academic year returns `1`.
+2. Subsequent allocations increment monotonically — no gaps, no duplicates.
+3. Sequences are independent per academic year (two years both start at `1`).
+4. `letter_number` is formatted `{seq:03d}/<TYPE>/BK/{year}` (§1.7).
+5. Backstop proof: directly inserting a row with a duplicate
+   `(academic_year_id, letter_seq)` raises `IntegrityError` — this
+   deterministically verifies the UNIQUE constraint that makes the
+   optimistic strategy in §8.3 safe.
+
+The genuine prod race (PostgreSQL two-writer collision → one IntegrityError)
+is covered analytically by case 5; a flaky `threading.Thread` test against
+in-memory SQLite is deliberately not attempted.
 
 ### 13.5 `test_routes.py`
 
@@ -1054,7 +1079,7 @@ Render each PDF template with a sample object; assert non-empty bytes + magic he
 | Risk | Mitigation |
 |---|---|
 | WeasyPrint system deps missing | Document `apt-get install libpango-1.0-0 libpangoft2-1.0-0 libcairo2 gir1.2-rsvg-2.0` in README; gate PDF tests with `pytest.importorskip("weasyprint")`. |
-| Race condition in letter numbering on SQLite | Surface via `test_letter_numbering.py`; document that prod **must** use PostgreSQL `SELECT ... FOR UPDATE`. |
+| Letter-numbering collision on simultaneous commit | The `UNIQUE(academic_year_id, letter_seq)` constraint (§2.13) makes duplicate seqs impossible to persist — corruption cannot occur. The residual risk is a rare user-visible error on a truly simultaneous commit (two Guru BK issuing letters in the same millisecond), which rolls back the loser's transaction; the user retries. Acceptable for v1's small user set; see §8.3. |
 | `Cannot reinitialise DataTable` after HTMX re-swap | Destroy-guard IIFE is mandatory (R11); consider a ruff grep check that every init is guarded. |
 | Wali kelas accessing students outside their class | Centralize scoping in `_student_choices()` + `@class_owned_required` decorator; per-endpoint RBAC integration tests. |
 | `student_point_summaries` drift from source of truth | `recompute_summary()` helper as backstop; consider a nightly job. |

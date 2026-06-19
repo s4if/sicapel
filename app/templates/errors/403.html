@@ -1,0 +1,16 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}403 &mdash; Akses Ditolak{% endblock %}
+{% else %}
+<title>403 &mdash; Akses Ditolak</title>
+{% endif %}
+
+{% block content %}
+<div class="text-center py-5">
+  <h1 class="display-1 fw-bold">403</h1>
+  <p class="lead">Anda tidak memiliki izin untuk mengakses halaman ini.</p>
+  <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary"
+     hx-get="{{ url_for('dashboard.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+     Kembali ke Beranda</a>
+</div>
+{% endblock %}

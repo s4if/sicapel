@@ -1,17 +1,32 @@
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
 from flask_migrate import Migrate
 
-from .helper import htmx
+from .helper import hx_render, htmx
 
 db = SQLAlchemy()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 migrate = Migrate()
+
+login_manager.login_view = "auth.login"
+login_manager.login_message = "Silakan login untuk mengakses halaman ini."
+login_manager.login_message_category = "info"
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    from .models import User
+
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(User, uid)
 
 
 def create_app(test_config=None):
@@ -41,9 +56,54 @@ def create_app(test_config=None):
     csrf.init_app(app)
     htmx.init_app(app)
 
+    from .blueprints import (
+        academic_years,
+        amnesties,
+        auth,
+        classes,
+        dashboard,
+        expulsion,
+        students,
+        users,
+        violation_types,
+        violations,
+        warnings,
+    )
+
+    for bp in (
+        auth.bp,
+        dashboard.bp,
+        students.bp,
+        classes.bp,
+        violations.bp,
+        warnings.bp,
+        amnesties.bp,
+        expulsion.bp,
+        users.bp,
+        violation_types.bp,
+        academic_years.bp,
+    ):
+        app.register_blueprint(bp)
+
+    @app.route("/")
+    def index():
+        return redirect(url_for("dashboard.index"))
+
     @app.route("/healthcheck")
     def healthcheck():
         return jsonify(status="ok"), 200
+
+    @app.errorhandler(403)
+    def forbidden(_e):
+        return hx_render("errors/403.html"), 403
+
+    @app.errorhandler(404)
+    def not_found(_e):
+        return hx_render("errors/404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(_e):
+        return hx_render("errors/500.html"), 500
 
     from .seed import seed_cli
 

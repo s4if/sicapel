@@ -1,0 +1,19 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Dashboard &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Dashboard &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+<div class="p-5 mb-4 bg-light rounded-3 border">
+  <div class="container-fluid">
+    <h1 class="display-5">Selamat datang, {{ current_user.name }}</h1>
+    <p class="lead">Anda login sebagai <strong>{{ current_user.role }}</strong>.</p>
+    <p class="text-muted">Dashboard lengkap akan diimplementasikan pada T15.</p>
+  </div>
+</div>
+{% endblock %}
