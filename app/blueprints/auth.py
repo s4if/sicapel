@@ -11,6 +11,10 @@ bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
 def _is_safe_url(target):
+    if target.startswith(("//", "\\\\")):
+        return False
+    if "\\" in target:
+        return False
     ref_url = urlparse(request.host_url)
     test_url = urlparse(urljoin(request.host_url, target))
     return (

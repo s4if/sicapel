@@ -1,0 +1,50 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ "Edit Jenis Pelanggaran" if violation_type else "Tambah Jenis Pelanggaran" }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ "Edit Jenis Pelanggaran" if violation_type else "Tambah Jenis Pelanggaran" }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">{{ "Edit Jenis Pelanggaran" if violation_type else "Tambah Jenis Pelanggaran" }}</h4>
+
+<form method="POST"
+      action="{{ url_for('violation_types.edit', id=violation_type.id) if violation_type else url_for('violation_types.tambah') }}"
+      hx-post="{{ url_for('violation_types.edit', id=violation_type.id) if violation_type else url_for('violation_types.tambah') }}"
+      hx-target="#hx_content" hx-swap="innerHTML">
+  {{ form.hidden_tag() }}
+
+  <div class="row">
+    <div class="col-md-6">
+      {{ render_field(form.category_id) }}
+    </div>
+    <div class="col-md-6">
+      {{ render_field(form.name) }}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-4">
+      {{ render_field(form.default_points) }}
+    </div>
+    <div class="col-md-8">
+      <div class="mb-3 form-check mt-4">
+        {{ form.is_active(class='form-check-input') }}
+        {{ form.is_active.label(class='form-check-label') }}
+      </div>
+    </div>
+  </div>
+
+  {{ render_field(form.description) }}
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('violation_types.index') }}"
+       hx-get="{{ url_for('violation_types.index') }}" hx-target="#hx_content" hx-swap="innerHTML">Batal</a>
+  </div>
+</form>
+{% endblock %}

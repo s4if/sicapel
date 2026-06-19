@@ -1,0 +1,61 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Siswa &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Siswa &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Data Siswa</h4>
+  {% if current_user.role in ('admin', 'guru_bk') %}
+  <a class="btn btn-primary" href="{{ url_for('students.tambah') }}"
+     hx-get="{{ url_for('students.tambah') }}" hx-target="#hx_content" hx-swap="innerHTML">
+    <i class="bi bi-plus-lg"></i> Tambah Siswa
+  </a>
+  {% endif %}
+</div>
+
+<table id="studentsTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>NIS</th>
+      <th>Nama</th>
+      <th>L/P</th>
+      <th>Kelas</th>
+      <th>Status</th>
+      <th>Poin</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+(function() {
+    if ($.fn.DataTable.isDataTable('#studentsTable')) {
+        $('#studentsTable').DataTable().destroy();
+        $('#studentsTable').empty();
+    }
+    $('#studentsTable').DataTable({
+        ajax: { url: '{{ url_for("students.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'nis' },
+            { data: 'name' },
+            { data: 'gender' },
+            { data: 'class' },
+            { data: 'status' },
+            { data: 'points' },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'asc']]
+    });
+})();
+</script>
+{% endblock %}

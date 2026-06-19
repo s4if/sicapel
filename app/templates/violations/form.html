@@ -1,0 +1,130 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Catat Pelanggaran &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Catat Pelanggaran &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">Catat Pelanggaran</h4>
+
+<form method="POST"
+      action="{{ url_for('violations.tambah') }}"
+      hx-post="{{ url_for('violations.tambah') }}"
+      hx-target="#hx_content" hx-swap="innerHTML">
+  {{ form.hidden_tag() }}
+
+  <div class="row">
+    <div class="col-md-6">
+      <div class="mb-3">
+        <label class="form-label">Filter Kelas</label>
+        <select class="form-select" id="classFilter"
+                hx-get="{{ url_for('students.by_class', class_id=0) }}"
+                hx-trigger="change"
+                hx-target="#studentContainer"
+                hx-swap="innerHTML"
+                hx-vals='{"class_id": ""}'>
+          <option value="">-- Semua Kelas --</option>
+          {% for cid, cname in class_choices %}
+          <option value="{{ cid }}">{{ cname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  document.getElementById('classFilter').addEventListener('htmx:configRequest', function(evt) {
+    var classId = document.getElementById('classFilter').value;
+    if (classId) {
+      evt.detail.path = '{{ url_for("students.by_class", class_id=0) }}'.slice(0, -1) + classId;
+    }
+  });
+  </script>
+
+  <div id="studentContainer">
+    {{ render_field(form.student_id) }}
+  </div>
+
+  {{ render_field(form.violation_type_id) }}
+
+  <div class="row">
+    <div class="col-md-4">
+      {{ render_field(form.points) }}
+    </div>
+    <div class="col-md-4">
+      {{ render_field(form.incident_date) }}
+    </div>
+    <div class="col-md-4">
+      {{ render_field(form.incident_time) }}
+    </div>
+  </div>
+
+  {{ render_field(form.location) }}
+  {{ render_field(form.chronology) }}
+
+  {{ render_field(form.semester) }}
+
+  <div id="pointPreview" class="mb-3" style="display:none">
+    <div class="alert alert-info" role="alert">
+      <strong>Pratinjau:</strong>
+      <span id="previewCategory"></span> &mdash;
+      <span id="previewPoints"></span> poin.
+      <span id="previewSp"></span>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('violations.index') }}"
+       hx-get="{{ url_for('violations.index') }}" hx-target="#hx_content" hx-swap="innerHTML">Batal</a>
+  </div>
+</form>
+
+<script>
+(function() {
+  var vtSelect = document.getElementById('violation_type_id');
+  var studentSelect = document.getElementById('student_id');
+  var pointsInput = document.getElementById('points');
+  var previewDiv = document.getElementById('pointPreview');
+  var previewCategory = document.getElementById('previewCategory');
+  var previewPoints = document.getElementById('previewPoints');
+  var previewSp = document.getElementById('previewSp');
+
+  function updatePreview() {
+    var vtId = vtSelect.value;
+    var studentId = studentSelect ? studentSelect.value : '';
+    if (!vtId) {
+      previewDiv.style.display = 'none';
+      return;
+    }
+    var params = new URLSearchParams({ violation_type_id: vtId });
+    if (studentId) params.append('student_id', studentId);
+    fetch('{{ url_for("violations.preview_points") }}?' + params.toString())
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.points) {
+          pointsInput.value = data.points;
+        }
+        previewCategory.textContent = data.category;
+        previewPoints.textContent = data.points;
+        if (data.will_trigger_sp) {
+          previewSp.innerHTML = '<strong class="text-danger">Akan menerbitkan SP' + data.sp_level + '.</strong>';
+        } else {
+          previewSp.innerHTML = '<span class="text-muted">Tidak menerbitkan SP.</span>';
+        }
+        previewDiv.style.display = 'block';
+      });
+  }
+
+  vtSelect.addEventListener('change', updatePreview);
+  if (studentSelect) {
+    studentSelect.addEventListener('change', updatePreview);
+  }
+})();
+</script>
+{% endblock %}

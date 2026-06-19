@@ -1,0 +1,124 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Detail Pelanggaran &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Detail Pelanggaran &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Detail Pelanggaran</h4>
+  <div class="d-flex gap-2">
+    {% if current_user.role in ('admin', 'guru_bk') and not record.is_void %}
+    <button class="btn btn-outline-danger btn-sm" type="button"
+            onclick="hapus_violation({{ record.id }}, '{{ record.student.name }}')">
+      <i class="bi bi-x-circle"></i> Batalkan
+    </button>
+    {% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('violations.index') }}"
+       hx-get="{{ url_for('violations.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-arrow-left"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Pelanggaran</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:140px">No. Record</th><td>{{ record.record_number }}</td></tr>
+          <tr><th>Jenis</th><td>{{ record.violation_type.name }}</td></tr>
+          <tr><th>Kategori</th><td>{{ record.category.name.capitalize() if record.category else '-' }}</td></tr>
+          <tr><th>Poin</th><td><strong>{{ record.points }}</strong></td></tr>
+          <tr><th>Lokasi</th><td>{{ record.location or '-' }}</td></tr>
+          <tr><th>Tanggal</th><td>{{ record.incident_date }}</td></tr>
+          <tr><th>Jam</th><td>{{ record.incident_time.strftime('%H:%M') if record.incident_time else '-' }}</td></tr>
+          <tr><th>Semester</th><td>{{ record.semester }}</td></tr>
+          <tr><th>Kronologi</th><td>{{ record.chronology or '-' }}</td></tr>
+          <tr><th>Status</th><td>{% if record.is_void %}<span class="badge bg-danger">Dibatalkan</span>{% else %}<span class="badge bg-success">Aktif</span>{% endif %}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Siswa</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:140px">NIS</th><td>{{ record.student.nis }}</td></tr>
+          <tr><th>Nama</th><td>{{ record.student.name }}</td></tr>
+          <tr><th>Kelas</th><td>{{ record.student.class_.name if record.student.class_ else '-' }}</td></tr>
+          <tr><th>Status</th><td>{{ record.student.status.capitalize() }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><strong>Ringkasan Poin</strong></div>
+      <div class="card-body">
+        {% if summary %}
+        <div class="row text-center">
+          <div class="col-6">
+            <div class="fs-4 fw-bold {% if summary.total_points > 200 %}text-danger{% elif summary.total_points > 0 %}text-warning{% else %}text-success{% endif %}">
+              {{ summary.total_points }}
+            </div>
+            <div class="text-muted">Total Poin</div>
+          </div>
+          <div class="col-6">
+            <div class="fs-4 fw-bold">
+              {% if summary.current_sp_level %}SP{{ summary.current_sp_level }}{% else %}-{% endif %}
+            </div>
+            <div class="text-muted">SP Saat Ini</div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">Belum ada ringkasan poin.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if record.new_warning %}
+<div class="card mb-3">
+  <div class="card-header"><strong>Surat Peringatan</strong></div>
+  <div class="card-body">
+    <p class="mb-0">Pelanggaran ini menerbitkan <strong>SP{{ record.new_warning.level }}</strong>.</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="modal fade" id="modalHapus" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Batalkan Pelanggaran</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">Yakin membatalkan pelanggaran <strong id="modalHapusNama"></strong>?</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalHapusForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
+            style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger">Void</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var hapus_violation = (id, nama) => {
+    document.getElementById('modalHapusForm').action = id + '/void';
+    document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
+    document.getElementById('modalHapusNama').textContent = nama;
+    new bootstrap.Modal(document.getElementById('modalHapus')).show();
+};
+</script>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Pelanggaran &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Pelanggaran &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Catatan Pelanggaran</h4>
+  <a class="btn btn-primary" href="{{ url_for('violations.tambah') }}"
+     hx-get="{{ url_for('violations.tambah') }}" hx-target="#hx_content" hx-swap="innerHTML">
+    <i class="bi bi-plus-lg"></i> Catat Pelanggaran
+  </a>
+</div>
+
+<table id="violationsTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>Siswa</th>
+      <th>Jenis</th>
+      <th>Kategori</th>
+      <th>Poin</th>
+      <th>Tanggal</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="modal fade" id="modalHapus" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Batalkan Pelanggaran</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">Yakin membatalkan pelanggaran <strong id="modalHapusNama"></strong>?</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalHapusForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
+            style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger">Void</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var hapus_violation = (id, nama) => {
+    document.getElementById('modalHapusForm').action = id + '/void';
+    document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
+    document.getElementById('modalHapusNama').textContent = nama;
+    new bootstrap.Modal(document.getElementById('modalHapus')).show();
+};
+(function() {
+    if ($.fn.DataTable.isDataTable('#violationsTable')) {
+        $('#violationsTable').DataTable().destroy();
+        $('#violationsTable').empty();
+    }
+    $('#violationsTable').DataTable({
+        ajax: { url: '{{ url_for("violations.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'student' },
+            { data: 'type' },
+            { data: 'category' },
+            { data: 'points' },
+            { data: 'date' },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'desc']]
+    });
+})();
+</script>
+{% endblock %}

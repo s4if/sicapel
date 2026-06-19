@@ -72,6 +72,36 @@ def test_login_rejects_unsafe_next(client, admin):
     assert "evil.example.com" not in resp.headers["Location"]
 
 
+def test_login_rejects_protocol_relative_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=//evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
+def test_login_rejects_triple_slash_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=///evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
+def test_login_rejects_backslash_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=\\\\evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
 def test_logout_requires_login(client):
     resp = client.get("/auth/logout", follow_redirects=False)
     assert resp.status_code == 302

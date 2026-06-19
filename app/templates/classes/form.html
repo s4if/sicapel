@@ -1,0 +1,38 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ "Edit Kelas" if cls else "Tambah Kelas" }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ "Edit Kelas" if cls else "Tambah Kelas" }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">{{ "Edit Kelas" if cls else "Tambah Kelas" }}</h4>
+
+<form method="POST"
+      action="{{ url_for('classes.edit', id=cls.id) if cls else url_for('classes.tambah') }}"
+      hx-post="{{ url_for('classes.edit', id=cls.id) if cls else url_for('classes.tambah') }}"
+      hx-target="#hx_content" hx-swap="innerHTML">
+  {{ form.hidden_tag() }}
+
+  {{ render_field(form.name) }}
+
+  <div class="row">
+    <div class="col-md-6">
+      {{ render_field(form.grade_level) }}
+    </div>
+    <div class="col-md-6">
+      {{ render_field(form.homeroom_teacher_id) }}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('classes.index') }}"
+       hx-get="{{ url_for('classes.index') }}" hx-target="#hx_content" hx-swap="innerHTML">Batal</a>
+  </div>
+</form>
+{% endblock %}
