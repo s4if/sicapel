@@ -12,10 +12,16 @@ wins, the other rolls back.
 from datetime import date
 
 import pytest
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.models import AcademicYear, ExpulsionRecommendation
+from app.models import (
+    AcademicYear,
+    ExpulsionRecommendation,
+    PointAmnesty,
+    WarningLetter,
+)
 from app.services import make_letter_number, next_letter_seq
 
 
@@ -118,3 +124,30 @@ def test_duplicate_year_seq_raises_integrity_error(violation_setup):
         _persist_expulsion(violation_setup, seq=1, ay_id=ay_id)
         db.session.flush()
     db.session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# 6. supplementary §2.13 backstop: the UNIQUE(academic_year_id, letter_seq)
+#    constraint exists on EVERY letter-issuing table.
+#
+# Case 5 proves the constraint *rejects* a duplicate at flush time on one
+# table (ExpulsionRecommendation). This case proves the constraint *exists*
+# on all three letter tables, so a future model edit that accidentally drops
+# it on WarningLetter or PointAmnesty is caught immediately — that constraint
+# is the entire invariant that makes the optimistic §8.3 strategy safe.
+# ---------------------------------------------------------------------------
+def _has_year_seq_unique(model) -> bool:
+    for constraint in model.__table__.constraints:
+        if isinstance(constraint, UniqueConstraint):
+            if {c.name for c in constraint.columns} == {
+                "academic_year_id",
+                "letter_seq",
+            }:
+                return True
+    return False
+
+
+def test_unique_year_seq_constraint_on_all_letter_tables():
+    assert _has_year_seq_unique(WarningLetter)
+    assert _has_year_seq_unique(ExpulsionRecommendation)
+    assert _has_year_seq_unique(PointAmnesty)

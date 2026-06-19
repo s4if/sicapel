@@ -25,7 +25,7 @@ _AMNESTY_CODE = "PMT"
 
 
 # ---------------------------------------------------------------------------
-# Letter numbering (partial T8 — basic sequential allocation)
+# Letter numbering (T8 — optimistic letter_seq allocation, §8.3)
 # ---------------------------------------------------------------------------
 def next_letter_seq(model, academic_year_id, session) -> int:
     """Optimistic ``letter_seq`` allocation (T8).
