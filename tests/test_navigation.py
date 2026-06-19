@@ -52,9 +52,50 @@ def test_nav_links_carry_both_href_and_hx_get(client, admin):
     assert 'hx-get="/pelanggaran/"' in body
 
 
-def test_nav_hidden_when_not_authenticated(client):
+@pytest.mark.parametrize(
+    "path,nav_key",
+    [
+        ("/dashboard/", "dashboard"),
+        ("/pelanggaran/", "pelanggaran"),
+        ("/siswa/", "siswa"),
+        ("/surat-peringatan/", "surat-peringatan"),
+    ],
+)
+def test_sidebar_active_item_matches_current_section(client, admin, path, nav_key):
+    login(client, "admin@example.com")
+    body = client.get(path).data.decode()
+    needle = 'data-nav-key="{}"'.format(nav_key)
+    idx = body.find(needle)
+    assert idx != -1
+    # The class attribute preceding this link should contain "active".
+    snippet = body[max(0, idx - 120) : idx]
+    assert "active" in snippet
+
+
+def test_sidebar_admin_accordion_opens_on_admin_page(client, admin):
+    login(client, "admin@example.com")
+    body = client.get("/kelas/").data.decode()
+    # Administrasi group auto-expanded and its sub-item marked active.
+    assert 'id="adminSubmenu"' in body
+    assert "app-nav-submenu show" in body
+    assert 'data-nav-key="kelas"' in body
+    assert "app-nav-sub active" in body
+    # On an admin page the toggle reports expanded.
+    assert 'aria-expanded="true"' in body
+
+
+def test_sidebar_admin_accordion_closed_on_non_admin_page(client, admin):
+    login(client, "admin@example.com")
+    body = client.get("/dashboard/").data.decode()
+    assert 'id="adminSubmenu"' in body
+    # "show" must not be applied when outside the admin section.
+    assert "app-nav-submenu show" not in body
+    assert 'aria-expanded="false"' in body
+
+
+def test_sidebar_hidden_when_not_authenticated(client):
     resp = client.get("/auth/login")
-    assert b'<nav class="navbar' not in resp.data
+    assert b'app-sidebar' not in resp.data
 
 
 def test_base_has_single_swap_target_and_boost(client, admin):

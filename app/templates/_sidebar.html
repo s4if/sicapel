@@ -1,0 +1,78 @@
+{# Role-aware left sidebar (WordPress-admin style).
+   R6: every content link carries href + hx-get. hx-target/hx-swap on the
+   <aside> are inherited by boosted links so they swap #hx_content.
+   Relies on current_user + request injected/available to templates. #}
+{% set _section = request.path.strip('/').split('/')[0] if request.path.strip('/') else '' %}
+{% set _is_admin_section = _section in ('kelas', 'pengguna', 'jenis-pelanggaran', 'tahun-ajaran') %}
+<aside class="app-sidebar" id="appSidebar" hx-target="#hx_content" hx-swap="innerHTML">
+  <div class="app-brand">
+    <a href="{{ url_for('dashboard.index') }}" hx-get="{{ url_for('dashboard.index') }}">
+      <i class="bi bi-mortarboard-fill"></i> SICAPEL
+    </a>
+  </div>
+  <nav class="app-sidebar-nav">
+    <a class="app-nav-link {% if _section == 'dashboard' %}active{% endif %}"
+       href="{{ url_for('dashboard.index') }}" hx-get="{{ url_for('dashboard.index') }}"
+       data-nav-key="dashboard">
+      <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+    </a>
+    <a class="app-nav-link {% if _section == 'pelanggaran' %}active{% endif %}"
+       href="{{ url_for('violations.index') }}" hx-get="{{ url_for('violations.index') }}"
+       data-nav-key="pelanggaran">
+      <i class="bi bi-exclamation-triangle"></i><span>Pelanggaran</span>
+    </a>
+    <a class="app-nav-link {% if _section == 'siswa' %}active{% endif %}"
+       href="{{ url_for('students.index') }}" hx-get="{{ url_for('students.index') }}"
+       data-nav-key="siswa">
+      <i class="bi bi-people"></i><span>Siswa</span>
+    </a>
+    {% if current_user.role in ('admin', 'guru_bk') %}
+    <a class="app-nav-link {% if _section == 'surat-peringatan' %}active{% endif %}"
+       href="{{ url_for('warnings.index') }}" hx-get="{{ url_for('warnings.index') }}"
+       data-nav-key="surat-peringatan">
+      <i class="bi bi-envelope-paper"></i><span>Surat Peringatan</span>
+    </a>
+    <a class="app-nav-link {% if _section == 'pemutihan' %}active{% endif %}"
+       href="{{ url_for('amnesties.index') }}" hx-get="{{ url_for('amnesties.index') }}"
+       data-nav-key="pemutihan">
+      <i class="bi bi-clipboard-check"></i><span>Pemutihan</span>
+    </a>
+    <a class="app-nav-link {% if _section == 'ekspulsi' %}active{% endif %}"
+       href="{{ url_for('expulsion.index') }}" hx-get="{{ url_for('expulsion.index') }}"
+       data-nav-key="ekspulsi">
+      <i class="bi bi-door-open"></i><span>Ekspulsi</span>
+    </a>
+    {% endif %}
+    {% if current_user.role == 'admin' %}
+    <button class="app-nav-link app-nav-toggle {% if _is_admin_section %}active{% endif %}"
+            type="button" data-bs-toggle="collapse" data-bs-target="#adminSubmenu"
+            aria-expanded="{% if _is_admin_section %}true{% else %}false{% endif %}"
+            aria-controls="adminSubmenu">
+      <i class="bi bi-gear"></i><span>Administrasi</span>
+      <i class="bi bi-chevron-down app-nav-caret ms-auto"></i>
+    </button>
+    <div class="collapse app-nav-submenu {% if _is_admin_section %}show{% endif %}" id="adminSubmenu">
+      <a class="app-nav-link app-nav-sub {% if _section == 'kelas' %}active{% endif %}"
+         href="{{ url_for('classes.index') }}" hx-get="{{ url_for('classes.index') }}"
+         data-nav-key="kelas">
+        <i class="bi bi-diagram-3"></i><span>Kelas</span>
+      </a>
+      <a class="app-nav-link app-nav-sub {% if _section == 'pengguna' %}active{% endif %}"
+         href="{{ url_for('users.index') }}" hx-get="{{ url_for('users.index') }}"
+         data-nav-key="pengguna">
+        <i class="bi bi-person-gear"></i><span>Pengguna</span>
+      </a>
+      <a class="app-nav-link app-nav-sub {% if _section == 'jenis-pelanggaran' %}active{% endif %}"
+         href="{{ url_for('violation_types.index') }}" hx-get="{{ url_for('violation_types.index') }}"
+         data-nav-key="jenis-pelanggaran">
+        <i class="bi bi-list-task"></i><span>Jenis Pelanggaran</span>
+      </a>
+      <a class="app-nav-link app-nav-sub {% if _section == 'tahun-ajaran' %}active{% endif %}"
+         href="{{ url_for('academic_years.index') }}" hx-get="{{ url_for('academic_years.index') }}"
+         data-nav-key="tahun-ajaran">
+        <i class="bi bi-calendar3"></i><span>Tahun Ajaran</span>
+      </a>
+    </div>
+    {% endif %}
+  </nav>
+</aside>
