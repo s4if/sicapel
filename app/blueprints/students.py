@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from ..forms import StudentForm
@@ -190,9 +190,4 @@ def by_class(class_id):
         .order_by(Student.name)
         .all()
     )
-    return jsonify(
-        [
-            {"id": s.id, "name": sanitize(s.name), "nis": sanitize(s.nis)}
-            for s in students
-        ]
-    )
+    return render_template("students/_by_class.html", students=students)

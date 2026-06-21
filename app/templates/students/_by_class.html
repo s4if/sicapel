@@ -1,0 +1,9 @@
+<div class="mb-3">
+  <label class="form-label" for="student_id">Siswa</label>
+  <select class="form-select" id="student_id" name="student_id" required>
+    <option value="">-- Pilih Siswa --</option>
+    {% for s in students %}
+    <option value="{{ s.id }}">{{ s.name }} ({{ s.nis }} - {{ s.class_.name }})</option>
+    {% endfor %}
+  </select>
+</div>

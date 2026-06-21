@@ -27,6 +27,7 @@
                 hx-trigger="change"
                 hx-target="#studentContainer"
                 hx-swap="innerHTML"
+                hx-push-url="false"
                 hx-vals='{"class_id": ""}'>
           <option value="">-- Semua Kelas --</option>
           {% for cid, cname in class_choices %}
