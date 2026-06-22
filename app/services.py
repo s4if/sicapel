@@ -442,3 +442,27 @@ def apply_amnesty(
 
     session.flush()
     return amnesty
+
+
+# ---------------------------------------------------------------------------
+# PDF renderers (partial T16 / §8.5 / §11)
+# ---------------------------------------------------------------------------
+# WeasyPrint is imported lazily inside each renderer so this module remains
+# importable when the OS-level Pango/Cairo deps are absent (PDF tests gate
+# with ``pytest.importorskip("weasyprint")``).
+def _weasyprint_pdf(template, **context) -> bytes:
+    from flask import current_app, render_template
+
+    from weasyprint import HTML
+
+    html_str = render_template(
+        template,
+        school_name=current_app.config.get("SCHOOL_NAME", "SICAPEL"),
+        **context,
+    )
+    return HTML(string=html_str).write_pdf()
+
+
+def render_warning_letter_pdf(warning_letter) -> bytes:
+    """Render a :class:`WarningLetter` (SP1/SP2/SP3) to PDF bytes (§8.5)."""
+    return _weasyprint_pdf("pdf/warning_letter_sp.html", letter=warning_letter)

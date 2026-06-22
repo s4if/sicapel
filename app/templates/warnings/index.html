@@ -1,0 +1,64 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Surat Peringatan &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Surat Peringatan &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Surat Peringatan</h4>
+</div>
+
+<div class="alert alert-light border small text-muted">
+  <i class="bi bi-info-circle"></i>
+  Surat peringatan diterbitkan otomatis saat pelanggaran
+  <strong>berat</strong>/<strong>menengah</strong> memenuhi syarat (§1.4).
+  Tambahkan pelanggaran baru dari menu <em>Pelanggaran</em>.
+</div>
+
+<table id="warningsTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>No. Surat</th>
+      <th>Tingkat</th>
+      <th>Siswa</th>
+      <th>Kelas</th>
+      <th>Poin</th>
+      <th>Tanggal</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+(function() {
+    if ($.fn.DataTable.isDataTable('#warningsTable')) {
+        $('#warningsTable').DataTable().destroy();
+        $('#warningsTable').empty();
+    }
+    $('#warningsTable').DataTable({
+        ajax: { url: '{{ url_for("warnings.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'letter_number' },
+            { data: 'level' },
+            { data: 'student' },
+            { data: 'class' },
+            { data: 'points' },
+            { data: 'issue_date' },
+            { data: 'status', orderable: false, searchable: false },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'desc']]
+    });
+})();
+</script>
+{% endblock %}

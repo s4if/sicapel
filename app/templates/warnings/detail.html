@@ -1,0 +1,149 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ letter.letter_number }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ letter.letter_number }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    Surat Peringatan <span class="badge text-bg-danger">{{ letter.level }}</span>
+  </h4>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-danger btn-sm" href="{{ url_for('warnings.pdf', id=letter.id) }}"
+       target="_blank" hx-boost="false">
+      <i class="bi bi-file-pdf"></i> Cetak PDF
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('warnings.index') }}"
+       hx-get="{{ url_for('warnings.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-arrow-left"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Surat</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:150px">No. Surat</th><td>{{ letter.letter_number }}</td></tr>
+          <tr><th>Tingkat</th><td><strong>{{ letter.level }}</strong></td></tr>
+          <tr><th>Tanggal Terbit</th><td>{{ letter.issue_date }}</td></tr>
+          <tr><th>Tahun Ajaran</th><td>{{ letter.academic_year.year if letter.academic_year else '-' }}</td></tr>
+          <tr><th>Diterbitkan Oleh</th><td>{{ letter.issued_by_user.name if letter.issued_by_user else '-' }}</td></tr>
+          <tr><th>Poin Saat Terbit</th><td><strong>{{ letter.total_points_at_issue }}</strong></td></tr>
+          <tr><th>Status</th><td>{% if letter.status == 'signed_returned' %}<span class="badge bg-success">Sudah Ditandatangani</span>{% elif letter.status == 'void' %}<span class="badge bg-secondary">Batal</span>{% else %}<span class="badge bg-warning text-dark">Diterbitkan</span>{% endif %}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><strong>Alasan Penerbitan</strong></div>
+      <div class="card-body">
+        <p class="mb-0">{{ letter.reason or '-' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Siswa</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:150px">NIS</th><td>{{ letter.student.nis }}</td></tr>
+          <tr><th>Nama</th><td>{{ letter.student.name }}</td></tr>
+          <tr><th>Kelas</th><td>{{ letter.student.class_.name if letter.student.class_ else '-' }}</td></tr>
+          <tr><th>Status</th><td>{{ letter.student.status.capitalize() }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    {% if letter.trigger_violation_record %}
+    <div class="card mb-3">
+      <div class="card-header"><strong>Pelanggaran Pemicu</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:150px">No. Record</th><td>{{ letter.trigger_violation_record.record_number }}</td></tr>
+          <tr><th>Jenis</th><td>{{ letter.trigger_violation_record.violation_type.name }}</td></tr>
+          <tr><th>Kategori</th><td>{{ letter.trigger_violation_record.category.name.capitalize() if letter.trigger_violation_record.category else '-' }}</td></tr>
+          <tr><th>Poin</th><td>{{ letter.trigger_violation_record.points }}</td></tr>
+          <tr><th>Tanggal</th><td>{{ letter.trigger_violation_record.incident_date }}</td></tr>
+        </table>
+        <div class="mt-2">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('violations.detail', id=letter.trigger_violation_record.id) }}"
+             hx-get="{{ url_for('violations.detail', id=letter.trigger_violation_record.id) }}"
+             hx-target="#hx_content" hx-swap="innerHTML">
+            <i class="bi bi-eye"></i> Lihat Detail Pelanggaran
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><strong>Dokumen Hasil Cetak &amp; Tanda Tangan</strong></div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-1">Scan Surat Peringatan (ditandatangani)</div>
+          {% if letter.signed_warning_doc %}
+          <i class="bi bi-file-earmark-pdf"></i>
+          <span>{{ letter.signed_warning_doc.file_name }}</span>
+          <div class="text-muted small">{{ letter.signed_warning_doc.mime_type }} &middot; {{ letter.signed_warning_doc.file_size }} byte</div>
+          {% else %}
+          <span class="text-muted">Belum diunggah.</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="border rounded p-3 h-100">
+          <div class="text-muted small mb-1">Scan Pernyataan Siswa</div>
+          {% if letter.signed_statement_doc %}
+          <i class="bi bi-file-earmark-pdf"></i>
+          <span>{{ letter.signed_statement_doc.file_name }}</span>
+          <div class="text-muted small">{{ letter.signed_statement_doc.mime_type }} &middot; {{ letter.signed_statement_doc.file_size }} byte</div>
+          {% else %}
+          <span class="text-muted">Belum diunggah.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if letter.status != 'void' %}
+    <hr>
+    <h6 class="mb-3">Unggah Dokumen Tanda Tangan</h6>
+    <form method="POST"
+          action="{{ url_for('warnings.upload_signed', id=letter.id) }}"
+          hx-post="{{ url_for('warnings.upload_signed', id=letter.id) }}"
+          hx-encoding="multipart/form-data"
+          hx-target="#hx_content" hx-swap="innerHTML"
+          enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <div class="row">
+        <div class="col-md-4">
+          {{ render_field(form.document_type, base_class='form-select') }}
+        </div>
+        <div class="col-md-5">
+          {{ render_field(form.file) }}
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-upload"></i> {{ form.submit.label.text }}
+          </button>
+        </div>
+      </div>
+      <div class="form-text">Format: PDF, JPG, PNG. Maks 16 MiB.</div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileRequired
 from wtforms import (
     BooleanField,
     DateField,
@@ -123,3 +124,22 @@ class ViolationRecordForm(FlaskForm):
         validators=[DataRequired()],
     )
     submit = SubmitField("Simpan")
+
+
+class SignedScanUploadForm(FlaskForm):
+    """Upload a signed-scan Document attached to a WarningLetter (T12).
+
+    MIME is validated from content in ``app.uploads.save_upload`` (not via
+    FileAllowed, which only checks extensions).
+    """
+
+    document_type = SelectField(
+        "Jenis Dokumen",
+        choices=[
+            ("signed_warning_letter", "Scan Surat Peringatan (ditandatangani)"),
+            ("signed_statement_letter", "Scan Pernyataan Siswa"),
+        ],
+        validators=[DataRequired()],
+    )
+    file = FileField("File", validators=[FileRequired(message="File wajib diunggah.")])
+    submit = SubmitField("Unggah")
