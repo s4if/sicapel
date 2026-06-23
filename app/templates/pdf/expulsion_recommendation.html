@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ expulsion.letter_number }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2.5cm 2cm 2cm 2cm;
+      @bottom-center {
+        content: "SICAPEL \2014 " counter(page) " / " counter(pages);
+        font-family: 'Times New Roman', serif;
+        font-size: 9pt;
+        color: #555;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 12pt;
+      color: #000;
+      line-height: 1.5;
+    }
+    .kop {
+      display: flex;
+      align-items: center;
+      border-bottom: 3px double #000;
+      padding-bottom: 10px;
+      margin-bottom: 6px;
+    }
+    .kop-logo {
+      width: 70px;
+      height: 70px;
+      border: 1px solid #999;
+      text-align: center;
+      line-height: 68px;
+      font-size: 9pt;
+      color: #777;
+      margin-right: 14px;
+      flex: 0 0 auto;
+    }
+    .kop-text { text-align: center; flex: 1 1 auto; }
+    .kop-text h1 {
+      font-size: 16pt;
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kop-text h2 {
+      font-size: 13pt;
+      margin: 2px 0 0;
+      text-transform: uppercase;
+    }
+    .kop-text .addr { font-size: 10pt; margin-top: 2px; }
+    .title {
+      text-align: center;
+      margin: 22px 0 4px;
+    }
+    .title h3 {
+      font-size: 13pt;
+      text-decoration: underline;
+      text-transform: uppercase;
+      margin: 0;
+    }
+    .title .nomor { font-size: 11pt; margin-top: 4px; }
+    .body p { text-align: justify; text-indent: 40px; margin: 6px 0; }
+    .meta {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 4px;
+    }
+    .meta td { padding: 2px 0; vertical-align: top; }
+    .meta td.k { width: 170px; }
+    .ttd { margin-top: 28px; }
+    .ttd table { width: 100%; border: none; }
+    .ttd td { text-align: center; vertical-align: top; }
+    .ttd .role { font-size: 11pt; }
+    .ttd .name { font-weight: bold; text-decoration: underline; margin-top: 56px; }
+    .ttd .nip { font-size: 10pt; }
+    .footer-note {
+      margin-top: 18px;
+      font-size: 10pt;
+      color: #444;
+      border-top: 1px solid #ccc;
+      padding-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="kop">
+    <div class="kop-logo">LOGO</div>
+    <div class="kop-text">
+      <h1>{{ school_name }}</h1>
+      <h2>{{ school_name }}</h2>
+      <div class="addr">Alamat sekolah &middot; Telepon &middot; Email</div>
+    </div>
+  </div>
+
+  <div class="title">
+    <h3>Surat Rekomendasi Pengeluaran</h3>
+    <div class="nomor">Nomor: {{ expulsion.letter_number }}</div>
+  </div>
+
+  <div class="body">
+    <p>Yang bertanda tangan di bawah ini, atas nama {{ school_name }},
+    dengan ini memberikan <strong>Surat Rekomendasi Pengeluaran</strong>
+    kepada siswa yang bersangkutan atas pelanggaran tata tertib sekolah
+    sebagaimana diuraikan berikut ini.</p>
+  </div>
+
+  <table class="meta">
+    <tr><td class="k">Nama Siswa</td><td>: {{ expulsion.student.name }}</td></tr>
+    <tr><td class="k">NIS</td><td>: {{ expulsion.student.nis }}</td></tr>
+    <tr><td class="k">Kelas</td><td>: {{ expulsion.student.class_.name if expulsion.student.class_ else '-' }}</td></tr>
+    <tr><td class="k">Tanggal Surat</td><td>: {{ expulsion.issue_date }}</td></tr>
+    <tr><td class="k">Total Poin Saat Diterbitkan</td><td>: {{ expulsion.total_points_at_issue }}</td></tr>
+    {% if expulsion.trigger_violation_record %}
+    <tr><td class="k">Pelanggaran Pemicu</td><td>: {{ expulsion.trigger_violation_record.violation_type.name }} ({{ expulsion.trigger_violation_record.points }} poin)</td></tr>
+    {% endif %}
+  </table>
+
+  <div class="body">
+    <p style="text-indent:0"><strong>Uraian:</strong></p>
+    <p>{{ expulsion.reason or 'Dikeluarkan sesuai ketentuan tata tertib sekolah.' }}</p>
+    <p>Berdasarkan pertimbangan di atas, siswa yang bersangkutan
+    direkomendasikan untuk dikeluarkan dari {{ school_name }}.</p>
+  </div>
+
+  <div class="ttd">
+    <table>
+      <tr>
+        <td style="width:55%"></td>
+        <td>
+          <div class="role">{{ expulsion.academic_year.year if expulsion.academic_year else '' }}<br>Diterbitkan oleh,</div>
+          <div class="name">{{ expulsion.issued_by_user.name if expulsion.issued_by_user else 'Guru BK' }}</div>
+          <div class="nip">Guru BK</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer-note">
+    Dokumen ini diterbitkan secara otomatis oleh sistem {{ school_name }}.
+  </div>
+</body>
+</html>

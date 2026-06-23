@@ -10,6 +10,7 @@ import io
 from flask import Blueprint, jsonify, send_file
 from flask_login import current_user, login_required
 
+from .. import db
 from ..forms import SignedScanUploadForm
 from ..helper import hx_render, role_required, sanitize
 from ..models import WarningLetter
@@ -92,8 +93,6 @@ def data():
 @login_required
 @role_required("admin", "guru_bk")
 def detail(id):
-    from .. import db
-
     w = db.get_or_404(WarningLetter, id)
     form = SignedScanUploadForm()
     return hx_render("warnings/detail.html", letter=w, form=form)
@@ -104,8 +103,6 @@ def detail(id):
 @role_required("admin", "guru_bk")
 def pdf(id):
     """PDF bytes via send_file — exempt from R1 (binary, not HTML, §6.2)."""
-    from .. import db
-
     w = db.get_or_404(WarningLetter, id)
     pdf_bytes = render_warning_letter_pdf(w)
     buf = io.BytesIO(pdf_bytes)
@@ -123,8 +120,6 @@ def pdf(id):
 @login_required
 @role_required("admin", "guru_bk")
 def upload_signed(id):
-    from .. import db
-
     w = db.get_or_404(WarningLetter, id)
 
     if w.status == "void":

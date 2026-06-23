@@ -1,0 +1,109 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ expulsion.letter_number }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ expulsion.letter_number }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    Rekomendasi Ekspulsi
+  </h4>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-danger btn-sm" href="{{ url_for('expulsion.pdf', id=expulsion.id) }}"
+       target="_blank" hx-boost="false">
+      <i class="bi bi-file-pdf"></i> Cetak PDF
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('expulsion.index') }}"
+       hx-get="{{ url_for('expulsion.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-arrow-left"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Surat</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:160px">No. Surat</th><td>{{ expulsion.letter_number }}</td></tr>
+          <tr><th>Tanggal Terbit</th><td>{{ expulsion.issue_date }}</td></tr>
+          <tr><th>Tahun Ajaran</th><td>{{ expulsion.academic_year.year if expulsion.academic_year else '-' }}</td></tr>
+          <tr><th>Diterbitkan Oleh</th><td>{{ expulsion.issued_by_user.name if expulsion.issued_by_user else '-' }}</td></tr>
+          <tr><th>Poin Saat Terbit</th><td><strong>{{ expulsion.total_points_at_issue }}</strong></td></tr>
+          <tr><th>Status</th><td>{% if expulsion.status == 'void' %}<span class="badge bg-secondary">Batal</span>{% else %}<span class="badge bg-danger">Diterbitkan</span>{% endif %}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><strong>Alasan</strong></div>
+      <div class="card-body">
+        <p class="mb-0">{{ expulsion.reason or '-' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Siswa</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:160px">NIS</th><td>{{ expulsion.student.nis }}</td></tr>
+          <tr><th>Nama</th><td>{{ expulsion.student.name }}</td></tr>
+          <tr><th>Kelas</th><td>{{ expulsion.student.class_.name if expulsion.student.class_ else '-' }}</td></tr>
+          <tr><th>Status</th><td>{{ expulsion.student.status.capitalize() }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    {% if expulsion.trigger_violation_record %}
+    <div class="card mb-3">
+      <div class="card-header"><strong>Pelanggaran Pemicu</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:160px">No. Record</th><td>{{ expulsion.trigger_violation_record.record_number }}</td></tr>
+          <tr><th>Jenis</th><td>{{ expulsion.trigger_violation_record.violation_type.name }}</td></tr>
+          <tr><th>Kategori</th><td>{{ expulsion.trigger_violation_record.category.name.capitalize() if expulsion.trigger_violation_record.category else '-' }}</td></tr>
+          <tr><th>Poin</th><td>{{ expulsion.trigger_violation_record.points }}</td></tr>
+          <tr><th>Tanggal</th><td>{{ expulsion.trigger_violation_record.incident_date }}</td></tr>
+        </table>
+        <div class="mt-2">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('violations.detail', id=expulsion.trigger_violation_record.id) }}"
+             hx-get="{{ url_for('violations.detail', id=expulsion.trigger_violation_record.id) }}"
+             hx-target="#hx_content" hx-swap="innerHTML">
+            <i class="bi bi-eye"></i> Lihat Detail Pelanggaran
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if expulsion.trigger_warning_letter %}
+    <div class="card mb-3">
+      <div class="card-header"><strong>Surat Peringatan Pemicu</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:160px">No. Surat</th><td>{{ expulsion.trigger_warning_letter.letter_number }}</td></tr>
+          <tr><th>Tingkat</th><td>{{ expulsion.trigger_warning_letter.level }}</td></tr>
+          <tr><th>Tanggal Terbit</th><td>{{ expulsion.trigger_warning_letter.issue_date }}</td></tr>
+        </table>
+        <div class="mt-2">
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('warnings.detail', id=expulsion.trigger_warning_letter.id) }}"
+             hx-get="{{ url_for('warnings.detail', id=expulsion.trigger_warning_letter.id) }}"
+             hx-target="#hx_content" hx-swap="innerHTML">
+            <i class="bi bi-eye"></i> Lihat Detail Surat Peringatan
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

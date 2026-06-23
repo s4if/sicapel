@@ -466,3 +466,10 @@ def _weasyprint_pdf(template, **context) -> bytes:
 def render_warning_letter_pdf(warning_letter) -> bytes:
     """Render a :class:`WarningLetter` (SP1/SP2/SP3) to PDF bytes (§8.5)."""
     return _weasyprint_pdf("pdf/warning_letter_sp.html", letter=warning_letter)
+
+
+def render_expulsion_pdf(expulsion) -> bytes:
+    """Render an :class:`ExpulsionRecommendation` to PDF bytes (§8.5)."""
+    return _weasyprint_pdf(
+        "pdf/expulsion_recommendation.html", expulsion=expulsion
+    )
