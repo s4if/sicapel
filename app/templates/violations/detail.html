@@ -112,7 +112,9 @@
       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
       <form id="modalHapusForm" method="POST"
             onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
-            style="display:inline">
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <button type="submit" class="btn btn-danger" id="modalHapusBtn">Void</button>
       </form>
@@ -124,6 +126,7 @@
 var hapus_violation = (id, nama) => {
     document.getElementById('modalHapusForm').action = id + '/void';
     document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
+    htmx.process(document.getElementById('modalHapusForm'));
     document.getElementById('modalHapusBody').innerHTML = 'Yakin membatalkan pelanggaran <strong>' + nama + '</strong>?';
     document.getElementById('modalHapusBtn').textContent = 'Void';
     document.getElementById('modalHapusBtn').className = 'btn btn-danger';
@@ -132,6 +135,7 @@ var hapus_violation = (id, nama) => {
 var pulihkan_violation = (id, nama) => {
     document.getElementById('modalHapusForm').action = id + '/recover';
     document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/recover');
+    htmx.process(document.getElementById('modalHapusForm'));
     document.getElementById('modalHapusBody').innerHTML = 'Yakin memulihkan pelanggaran <strong>' + nama + '</strong>?';
     document.getElementById('modalHapusBtn').textContent = 'Pulihkan';
     document.getElementById('modalHapusBtn').className = 'btn btn-success';

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, url_for
 from flask_login import current_user, login_required
 
 from ..forms import ViolationRecordForm
@@ -15,13 +15,15 @@ from ..models import (
     ViolationRecord,
     ViolationType,
 )
-from ..services import record_violation, recompute_summary
+from ..services import recompute_summary, record_violation
 
 bp = Blueprint("violations", __name__, url_prefix="/pelanggaran")
 
 
 def _student_choices():
-    q = Student.query.filter(Student.status != "expelled").order_by(Student.name)
+    q = Student.query.filter(Student.status != "expelled").order_by(
+        Student.name
+    )
     if current_user.role == "wali_kelas":
         q = q.filter(Student.class_.homeroom_teacher_id == current_user.id)
     return [(s.id, f"{s.name} ({s.nis} - {s.class_.name})") for s in q.all()]
@@ -51,7 +53,7 @@ def _row_actions(v):
         f'hx-get="{detail_url}" hx-target="#hx_content" hx-swap="innerHTML">'
         f'<i class="bi bi-eye"></i></a>'
         f'<button class="btn btn-outline-danger" type="button" '
-        f'onclick="hapus_violation({v.id}, \'{sanitize(v.student.name)}\')">'
+        f"onclick=\"hapus_violation({v.id}, '{sanitize(v.student.name)}', '{url_for('violations.void', id=v.id)}')\">"
         f'<i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
@@ -215,13 +217,11 @@ def tambah():
 
     notif = {"success": "Pelanggaran dicatat."}
     if result.get("new_warning"):
-        notif[
-            "info"
-        ] = f"SP{result['new_warning'].level} diterbitkan untuk siswa."
+        notif["info"] = (
+            f"SP{result['new_warning'].level} diterbitkan untuk siswa."
+        )
     if result.get("student_expelled"):
-        notif[
-            "error"
-        ] = "Siswa dikeluarkan &mdash; surat rekomendasi terbit."
+        notif["error"] = "Siswa dikeluarkan &mdash; surat rekomendasi terbit."
 
     return hx_render(
         "violations/index.html", push_url="violations.index", **notif
@@ -251,9 +251,7 @@ def detail(id):
     summary = StudentPointSummary.query.filter_by(
         student_id=v.student_id
     ).first()
-    return hx_render(
-        "violations/detail.html", record=v, summary=summary
-    )
+    return hx_render("violations/detail.html", record=v, summary=summary)
 
 
 @bp.route("/<int:id>/void", methods=["POST"])

@@ -7,7 +7,7 @@ Access is admin + guru_bk only (wali_kelas never sees this section).
 
 import io
 
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, send_file, url_for
 from flask_login import current_user, login_required
 
 from .. import db
@@ -48,7 +48,7 @@ def _row_actions(w):
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
         f'<button class="btn btn-outline-warning" type="button" '
-        f'onclick="void_warning({w.id}, \'{sanitize(w.letter_number)}\')" '
+        f"onclick=\"void_warning({w.id}, '{sanitize(w.letter_number)}', '{url_for('warnings.void', id=w.id)}')\" "
         f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )

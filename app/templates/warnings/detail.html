@@ -18,12 +18,12 @@
     {% if current_user.role in ('admin', 'guru_bk') %}
       {% if letter.status != 'void' %}
       <button class="btn btn-outline-warning btn-sm" type="button"
-              onclick="void_warning({{ letter.id }}, '{{ letter.letter_number }}')">
+              onclick="void_warning({{ letter.id }}, '{{ letter.letter_number }}', '{{ url_for('warnings.void', id=letter.id) }}')">
         <i class="bi bi-x-circle"></i> Batalkan
       </button>
       {% else %}
       <button class="btn btn-outline-success btn-sm" type="button"
-              onclick="recover_warning({{ letter.id }}, '{{ letter.letter_number }}')">
+              onclick="recover_warning({{ letter.id }}, '{{ letter.letter_number }}', '{{ url_for('warnings.recover', id=letter.id) }}')">
         <i class="bi bi-arrow-counterclockwise"></i> Pulihkan
       </button>
       {% endif %}
@@ -171,7 +171,9 @@
       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
       <form id="modalVoidForm" method="POST"
             onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalVoid')).hide()"
-            style="display:inline">
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <button type="submit" class="btn btn-danger" id="modalVoidBtn">Void</button>
       </form>
@@ -180,17 +182,19 @@
 </div>
 
 <script>
-var void_warning = (id, nomor) => {
-    document.getElementById('modalVoidForm').action = id + '/void';
-    document.getElementById('modalVoidForm').setAttribute('hx-post', id + '/void');
+var void_warning = (id, nomor, url) => {
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
     document.getElementById('modalVoidBody').innerHTML = 'Yakin membatalkan surat <strong>' + nomor + '</strong>?';
     document.getElementById('modalVoidBtn').textContent = 'Void';
     document.getElementById('modalVoidBtn').className = 'btn btn-warning';
     new bootstrap.Modal(document.getElementById('modalVoid')).show();
 };
-var recover_warning = (id, nomor) => {
-    document.getElementById('modalVoidForm').action = id + '/recover';
-    document.getElementById('modalVoidForm').setAttribute('hx-post', id + '/recover');
+var recover_warning = (id, nomor, url) => {
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
     document.getElementById('modalVoidBody').innerHTML = 'Yakin memulihkan surat <strong>' + nomor + '</strong>?';
     document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
     document.getElementById('modalVoidBtn').className = 'btn btn-success';

@@ -44,7 +44,9 @@
       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
       <form id="modalHapusForm" method="POST"
             onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
-            style="display:inline">
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <button type="submit" class="btn btn-danger" id="modalHapusBtn">Void</button>
       </form>
@@ -53,12 +55,14 @@
 </div>
 
 <script>
-var hapus_violation = (id, nama) => {
-    document.getElementById('modalHapusForm').action = id + '/void';
-    document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
+var hapus_violation = (id, nama, url) => {
+    console.log(url);
+    document.getElementById('modalHapusForm').action = url;
+    document.getElementById('modalHapusForm').setAttribute('hx-post', url);
     document.getElementById('modalHapusBody').innerHTML = 'Yakin membatalkan pelanggaran <strong>' + nama + '</strong>?';
     document.getElementById('modalHapusBtn').textContent = 'Void';
     document.getElementById('modalHapusBtn').className = 'btn btn-danger';
+    htmx.process(document.getElementById('modalHapusForm'));
     new bootstrap.Modal(document.getElementById('modalHapus')).show();
 };
 (function() {
