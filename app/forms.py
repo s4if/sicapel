@@ -13,7 +13,7 @@ from wtforms import (
 )
 from wtforms.validators import DataRequired, Email, NumberRange, Optional
 
-from .models import SEMESTERS, STUDENT_STATUSES, USER_ROLES
+from .models import AMNESTY_REASON_CATEGORIES, SEMESTERS, STUDENT_STATUSES, USER_ROLES
 
 
 class LoginForm(FlaskForm):
@@ -143,3 +143,41 @@ class SignedScanUploadForm(FlaskForm):
     )
     file = FileField("File", validators=[FileRequired(message="File wajib diunggah.")])
     submit = SubmitField("Unggah")
+
+
+class PointAmnestyForm(FlaskForm):
+    """Create a point amnesty (pemutihan) — T14 / §1.6.
+
+    A signed scanned letter is mandatory (§2.12 ``signed_document_id`` NOT
+    NULL) and is uploaded as ``file``; MIME is validated from content in
+    ``app.uploads.save_upload``. ``sp_reset`` optionally clears the active SP
+    level (historical ``warning_letters`` are never deleted).
+    """
+
+    student_id = SelectField("Siswa", coerce=int, validators=[DataRequired()])
+    points_reduced = IntegerField(
+        "Poin Dikurangi",
+        validators=[DataRequired(), NumberRange(min=1)],
+    )
+    reason_category = SelectField(
+        "Kategori Alasan",
+        choices=[
+            (c, {"prestasi": "Prestasi", "perilaku_baik": "Perilaku Baik",
+                 "kerja_bakti": "Kerja Bakti", "lainnya": "Lainnya"}[c])
+            for c in AMNESTY_REASON_CATEGORIES
+        ],
+        validators=[DataRequired()],
+    )
+    reason = TextAreaField("Alasan / Uraian", validators=[Optional()])
+    sp_reset = BooleanField("Reset SP (kosongkan level SP aktif)")
+    principal_name = StringField(
+        "Nama Kepala Sekolah", validators=[DataRequired()]
+    )
+    issue_date = DateField(
+        "Tanggal Surat", validators=[DataRequired()], format="%Y-%m-%d"
+    )
+    file = FileField(
+        "Scan Surat Pemutihan (ditandatangani)",
+        validators=[FileRequired(message="Scan surat pemutihan wajib diunggah.")],
+    )
+    submit = SubmitField("Simpan")

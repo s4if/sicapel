@@ -473,3 +473,8 @@ def render_expulsion_pdf(expulsion) -> bytes:
     return _weasyprint_pdf(
         "pdf/expulsion_recommendation.html", expulsion=expulsion
     )
+
+
+def render_amnesty_pdf(amnesty) -> bytes:
+    """Render a :class:`PointAmnesty` letter to PDF bytes (§8.5)."""
+    return _weasyprint_pdf("pdf/amnesty_letter.html", amnesty=amnesty)

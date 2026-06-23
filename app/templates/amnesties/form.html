@@ -1,0 +1,58 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Catat Pemutihan &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Catat Pemutihan &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">Catat Pemutihan</h4>
+
+<form method="POST"
+      action="{{ url_for('amnesties.tambah') }}"
+      hx-post="{{ url_for('amnesties.tambah') }}"
+      hx-encoding="multipart/form-data"
+      hx-target="#hx_content" hx-swap="innerHTML"
+      enctype="multipart/form-data">
+  {{ form.hidden_tag() }}
+
+  {{ render_field(form.student_id, base_class='form-select') }}
+  {{ render_field(form.principal_name) }}
+
+  <div class="row">
+    <div class="col-md-6">
+      {{ render_field(form.points_reduced) }}
+    </div>
+    <div class="col-md-6">
+      {{ render_field(form.issue_date) }}
+    </div>
+  </div>
+
+  {{ render_field(form.reason_category, base_class='form-select') }}
+  {{ render_field(form.reason) }}
+
+  <div class="form-check mb-3">
+    {{ form.sp_reset(class='form-check-input' ~ (' is-invalid' if form.sp_reset.errors else ''), id='sp_reset') }}
+    {{ form.sp_reset.label(class='form-check-label', for='sp_reset') }}
+    {% if form.sp_reset.errors %}
+    <div class="invalid-feedback">
+      {% for error in form.sp_reset.errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="form-text">Kosongkan level SP aktif siswa. Surat peringatan historis tidak dihapus (§1.6).</div>
+  </div>
+
+  {{ render_field(form.file) }}
+  <div class="form-text">Scan surat pemutihan bertanda tangan. Format: PDF, JPG, PNG. Maks 16 MiB.</div>
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('amnesties.index') }}"
+       hx-get="{{ url_for('amnesties.index') }}" hx-target="#hx_content" hx-swap="innerHTML">Batal</a>
+  </div>
+</form>
+{% endblock %}
