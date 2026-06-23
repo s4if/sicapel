@@ -174,20 +174,91 @@ def violation_setup(app, guru_bk):
 
     Returns a namespace with convenient attributes.
     """
+    from datetime import date
     from types import SimpleNamespace
 
-    ay = make_academic_year()
-    cats = make_categories()
-
-    vt_ringan = make_violation_type(cats["ringan"], "Terlambat", 25, guru_bk.id)
-    vt_menengah = make_violation_type(cats["menengah"], "Gadget", 50, guru_bk.id)
-    vt_berat = make_violation_type(cats["berat"], "Merokok", 60, guru_bk.id)
-    vt_sangat = make_violation_type(
-        cats["sangat_berat"], "Narkoba", 200, guru_bk.id
+    ay = AcademicYear(
+        year="2026/2027",
+        start_date=date(2026, 7, 1),
+        end_date=date(2027, 6, 30),
+        is_active=True,
     )
+    db.session.add(ay)
 
-    cls = make_class(guru_bk.id, "X IPA 1")
-    student = make_student(cls.id, "1001")
+    _CATEGORY_SPECS = {
+        "ringan": (5, 25, False),
+        "menengah": (25, 50, False),
+        "berat": (51, 75, False),
+        "sangat_berat": (200, 200, True),
+    }
+    cats = {}
+    for name, (lo, hi, direct) in _CATEGORY_SPECS.items():
+        cat = ViolationCategory(
+            name=name,
+            min_points=lo,
+            max_points=hi,
+            is_direct_expulsion=direct,
+            description=f"Pelanggaran {name}.",
+        )
+        db.session.add(cat)
+        cats[name] = cat
+    db.session.flush()
+
+    vt_ringan = ViolationType(
+        category_id=cats["ringan"].id,
+        name="Terlambat",
+        default_points=25,
+        is_active=True,
+        created_by=guru_bk.id,
+    )
+    db.session.add(vt_ringan)
+
+    vt_menengah = ViolationType(
+        category_id=cats["menengah"].id,
+        name="Gadget",
+        default_points=50,
+        is_active=True,
+        created_by=guru_bk.id,
+    )
+    db.session.add(vt_menengah)
+
+    vt_berat = ViolationType(
+        category_id=cats["berat"].id,
+        name="Merokok",
+        default_points=60,
+        is_active=True,
+        created_by=guru_bk.id,
+    )
+    db.session.add(vt_berat)
+
+    vt_sangat = ViolationType(
+        category_id=cats["sangat_berat"].id,
+        name="Narkoba",
+        default_points=200,
+        is_active=True,
+        created_by=guru_bk.id,
+    )
+    db.session.add(vt_sangat)
+
+    cls = Class(
+        name="X IPA 1",
+        grade_level=10,
+        homeroom_teacher_id=guru_bk.id,
+    )
+    db.session.add(cls)
+
+    db.session.flush()
+
+    student = Student(
+        nis="1001",
+        name="Siswa",
+        gender="L",
+        class_id=cls.id,
+        status="active",
+    )
+    db.session.add(student)
+
+    db.session.commit()
 
     return SimpleNamespace(
         ay=ay,

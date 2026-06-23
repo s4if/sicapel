@@ -201,8 +201,12 @@ class WarningLetter(db.Model):
     academic_year_id = db.Column(
         db.Integer, db.ForeignKey("academic_years.id"), nullable=False
     )
-    signed_warning_doc_id = db.Column(db.Integer, db.ForeignKey("documents.id"))
-    signed_statement_doc_id = db.Column(db.Integer, db.ForeignKey("documents.id"))
+    signed_warning_doc_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", use_alter=True)
+    )
+    signed_statement_doc_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", use_alter=True)
+    )
     status = db.Column(
         _enum(WARNING_LETTER_STATUSES, "warning_letter_status"),
         nullable=False,
