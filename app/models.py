@@ -276,7 +276,7 @@ class Document(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     violation_record_id = db.Column(db.Integer, db.ForeignKey("violation_records.id"))
-    warning_letter_id = db.Column(db.Integer, db.ForeignKey("warning_letters.id"))
+    warning_letter_id = db.Column(db.Integer, db.ForeignKey("warning_letters.id", use_alter=True))
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     mime_type = db.Column(db.String(120), nullable=False)
