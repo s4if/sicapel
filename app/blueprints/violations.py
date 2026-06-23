@@ -154,7 +154,7 @@ def by_type(violation_type_id):
     return jsonify(
         {
             "id": vt.id,
-            "name": vt.name,
+            "name": sanitize(vt.name),
             "default_points": vt.default_points,
             "category": vt.category.name if vt.category else "",
             "category_id": vt.category_id,
@@ -276,4 +276,27 @@ def void(id):
     return hx_render(
         "violations/index.html",
         success=f"Pelanggaran {sanitize(v.violation_type.name)} untuk {sanitize(v.student.name)} dibatalkan.",
+    )
+
+
+@bp.route("/<int:id>/recover", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def recover(id):
+    from .. import db
+
+    v = db.get_or_404(ViolationRecord, id)
+    if not v.is_void:
+        return hx_render(
+            "violations/index.html",
+            error="Pelanggaran belum dibatalkan.",
+        )
+
+    v.is_void = False
+    recompute_summary(v.student_id, db.session)
+    db.session.commit()
+
+    return hx_render(
+        "violations/index.html",
+        success=f"Pelanggaran {sanitize(v.violation_type.name)} untuk {sanitize(v.student.name)} dipulihkan.",
     )

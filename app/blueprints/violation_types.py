@@ -73,9 +73,9 @@ def tambah():
 
     vt = ViolationType(
         category_id=form.category_id.data,
-        name=sanitize(form.name.data),
+        name=form.name.data,
         default_points=form.default_points.data,
-        description=sanitize(form.description.data) if form.description.data else None,
+        description=form.description.data if form.description.data else None,
         is_active=form.is_active.data,
         created_by=current_user.id,
     )
@@ -108,11 +108,9 @@ def edit(id):
         )
 
     vt.category_id = form.category_id.data
-    vt.name = sanitize(form.name.data)
+    vt.name = form.name.data
     vt.default_points = form.default_points.data
-    vt.description = (
-        sanitize(form.description.data) if form.description.data else None
-    )
+    vt.description = form.description.data if form.description.data else None
     vt.is_active = form.is_active.data
     db.session.commit()
 

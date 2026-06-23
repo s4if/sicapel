@@ -40,15 +40,19 @@ def _status_badge(status):
 def _row_actions(w):
     detail_url = f"{w.id}"
     pdf_url = f"{w.id}/pdf"
-    return (
+    actions = (
         f'<div class="btn-group btn-group-sm">'
         f'<a class="btn btn-outline-info" href="{detail_url}" '
         f'hx-get="{detail_url}" hx-target="#hx_content" hx-swap="innerHTML">'
         f'<i class="bi bi-eye"></i></a>'
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
+        f'<button class="btn btn-outline-warning" type="button" '
+        f'onclick="void_warning({w.id}, \'{sanitize(w.letter_number)}\')" '
+        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
+    return actions
 
 
 @bp.route("/")
@@ -113,6 +117,46 @@ def pdf(id):
         mimetype="application/pdf",
         as_attachment=True,
         download_name=download,
+    )
+
+
+@bp.route("/<int:id>/void", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def void(id):
+    from .. import db
+
+    w = db.get_or_404(WarningLetter, id)
+    if w.status == "void":
+        return hx_render(
+            "warnings/index.html",
+            error="Surat peringatan sudah dibatalkan.",
+        )
+    w.status = "void"
+    db.session.commit()
+    return hx_render(
+        "warnings/index.html",
+        success=f"Surat {sanitize(w.letter_number)} dibatalkan.",
+    )
+
+
+@bp.route("/<int:id>/recover", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def recover(id):
+    from .. import db
+
+    w = db.get_or_404(WarningLetter, id)
+    if w.status != "void":
+        return hx_render(
+            "warnings/index.html",
+            error="Surat peringatan belum dibatalkan.",
+        )
+    w.status = "issued"
+    db.session.commit()
+    return hx_render(
+        "warnings/index.html",
+        success=f"Surat {sanitize(w.letter_number)} dipulihkan.",
     )
 
 

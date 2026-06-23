@@ -38,7 +38,42 @@
   <tbody></tbody>
 </table>
 
+<div class="modal fade" id="modalVoid" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Konfirmasi</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="modalVoidBody"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalVoidForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalVoid')).hide()"
+            style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger" id="modalVoidBtn">Void</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
 <script>
+var void_warning = (id, nomor) => {
+    document.getElementById('modalVoidForm').action = id + '/void';
+    document.getElementById('modalVoidForm').setAttribute('hx-post', id + '/void');
+    document.getElementById('modalVoidBody').innerHTML = 'Yakin membatalkan surat <strong>' + nomor + '</strong>?';
+    document.getElementById('modalVoidBtn').textContent = 'Void';
+    document.getElementById('modalVoidBtn').className = 'btn btn-warning';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
+var recover_warning = (id, nomor) => {
+    document.getElementById('modalVoidForm').action = id + '/recover';
+    document.getElementById('modalVoidForm').setAttribute('hx-post', id + '/recover');
+    document.getElementById('modalVoidBody').innerHTML = 'Yakin memulihkan surat <strong>' + nomor + '</strong>?';
+    document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
+    document.getElementById('modalVoidBtn').className = 'btn btn-success';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
 (function() {
     if ($.fn.DataTable.isDataTable('#warningsTable')) {
         $('#warningsTable').DataTable().destroy();

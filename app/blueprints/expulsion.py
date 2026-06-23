@@ -39,6 +39,9 @@ def _row_actions(e):
         f'<i class="bi bi-eye"></i></a>'
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
+        f'<button class="btn btn-outline-warning" type="button" '
+        f'onclick="void_expulsion({e.id}, \'{sanitize(e.letter_number)}\')" '
+        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
 
@@ -105,4 +108,40 @@ def pdf(id):
         mimetype="application/pdf",
         as_attachment=True,
         download_name=download,
+    )
+
+
+@bp.route("/<int:id>/void", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def void(id):
+    e = db.get_or_404(ExpulsionRecommendation, id)
+    if e.status == "void":
+        return hx_render(
+            "expulsion/index.html",
+            error="Rekomendasi ekspulsi sudah dibatalkan.",
+        )
+    e.status = "void"
+    db.session.commit()
+    return hx_render(
+        "expulsion/index.html",
+        success=f"Rekomendasi ekspulsi {sanitize(e.letter_number)} dibatalkan.",
+    )
+
+
+@bp.route("/<int:id>/recover", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def recover(id):
+    e = db.get_or_404(ExpulsionRecommendation, id)
+    if e.status != "void":
+        return hx_render(
+            "expulsion/index.html",
+            error="Rekomendasi ekspulsi belum dibatalkan.",
+        )
+    e.status = "issued"
+    db.session.commit()
+    return hx_render(
+        "expulsion/index.html",
+        success=f"Rekomendasi ekspulsi {sanitize(e.letter_number)} dipulihkan.",
     )

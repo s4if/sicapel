@@ -36,17 +36,17 @@
 <div class="modal fade" id="modalHapus" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header">
-      <h5 class="modal-title">Batalkan Pelanggaran</h5>
+      <h5 class="modal-title">Konfirmasi</h5>
       <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
     </div>
-    <div class="modal-body">Yakin membatalkan pelanggaran <strong id="modalHapusNama"></strong>?</div>
+    <div class="modal-body" id="modalHapusBody"></div>
     <div class="modal-footer">
       <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
       <form id="modalHapusForm" method="POST"
             onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
             style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <button type="submit" class="btn btn-danger">Void</button>
+        <button type="submit" class="btn btn-danger" id="modalHapusBtn">Void</button>
       </form>
     </div>
   </div></div>
@@ -56,7 +56,9 @@
 var hapus_violation = (id, nama) => {
     document.getElementById('modalHapusForm').action = id + '/void';
     document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
-    document.getElementById('modalHapusNama').textContent = nama;
+    document.getElementById('modalHapusBody').innerHTML = 'Yakin membatalkan pelanggaran <strong>' + nama + '</strong>?';
+    document.getElementById('modalHapusBtn').textContent = 'Void';
+    document.getElementById('modalHapusBtn').className = 'btn btn-danger';
     new bootstrap.Modal(document.getElementById('modalHapus')).show();
 };
 (function() {

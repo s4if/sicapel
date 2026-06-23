@@ -59,6 +59,9 @@ def _row_actions(a):
         f'<i class="bi bi-eye"></i></a>'
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
+        f'<button class="btn btn-outline-warning" type="button" '
+        f'onclick="void_amnesty({a.id}, \'{sanitize(a.letter_number)}\')" '
+        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
 
@@ -191,4 +194,46 @@ def pdf(id):
         mimetype="application/pdf",
         as_attachment=True,
         download_name=download,
+    )
+
+
+@bp.route("/<int:id>/void", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def void(id):
+    from ..services import recompute_summary
+
+    a = db.get_or_404(PointAmnesty, id)
+    if a.status == "void":
+        return hx_render(
+            "amnesties/index.html",
+            error="Pemutihan sudah dibatalkan.",
+        )
+    a.status = "void"
+    recompute_summary(a.student_id, db.session)
+    db.session.commit()
+    return hx_render(
+        "amnesties/index.html",
+        success=f"Pemutihan {sanitize(a.letter_number)} dibatalkan.",
+    )
+
+
+@bp.route("/<int:id>/recover", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def recover(id):
+    from ..services import recompute_summary
+
+    a = db.get_or_404(PointAmnesty, id)
+    if a.status != "void":
+        return hx_render(
+            "amnesties/index.html",
+            error="Pemutihan belum dibatalkan.",
+        )
+    a.status = "issued"
+    recompute_summary(a.student_id, db.session)
+    db.session.commit()
+    return hx_render(
+        "amnesties/index.html",
+        success=f"Pemutihan {sanitize(a.letter_number)} dipulihkan.",
     )
