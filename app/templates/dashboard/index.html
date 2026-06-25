@@ -9,11 +9,78 @@
 
 {% block content %}
 {{ render_notif(error, success, info) }}
-<div class="p-5 mb-4 bg-light rounded-3 border">
-  <div class="container-fluid">
-    <h1 class="display-5">Selamat datang, {{ current_user.name }}</h1>
-    <p class="lead">Anda login sebagai <strong>{{ current_user.role }}</strong>.</p>
-    <p class="text-muted">Dashboard lengkap akan diimplementasikan pada T15.</p>
-  </div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Dashboard Monitoring</h4>
+  {% if stats.alert_students > 0 %}
+  <span class="badge bg-danger fs-6">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    {{ stats.alert_students }} siswa &gt; {{ stats.alert_threshold }} poin
+  </span>
+  {% endif %}
 </div>
+
+{# §1.8 HTMX auto-refresh: the stat cards panel re-renders every 60 s.
+   hx-target="this" + hx-swap="innerHTML" replaces only this fragment. #}
+<div id="dashboard-stats"
+     hx-get="{{ url_for('dashboard.stats') }}"
+     hx-trigger="every 60s"
+     hx-target="this"
+     hx-swap="innerHTML">
+  {% include "dashboard/_stats.html" %}
+</div>
+
+<h5 class="mb-2">Peringkat Siswa Berdasarkan Poin</h5>
+<table id="dashboardRankTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>NIS</th>
+      <th>Nama</th>
+      <th>Kelas</th>
+      <th>Total Poin</th>
+      <th>SP</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+(function() {
+    if ($.fn.DataTable.isDataTable('#dashboardRankTable')) {
+        $('#dashboardRankTable').DataTable().destroy();
+        $('#dashboardRankTable').empty();
+    }
+    $('#dashboardRankTable').DataTable({
+        ajax: { url: '{{ url_for("dashboard.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'nis' },
+            { data: 'name' },
+            { data: 'class' },
+            { data: 'points' },
+            { data: 'sp' },
+            { data: 'status' },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[4, 'desc']],
+        // §1.8: highlight rows whose total_points > 200 (display-only alert).
+        createdRow: function(row, data) {
+            if (data.alert) {
+                row.classList.add('table-danger', 'fw-semibold');
+            }
+        }
+    });
+
+    // Keep the ranking in sync with the 60 s HTMX stat poll (§1.8). Silent
+    // reload preserves the current page/search/sort state.
+    setInterval(function() {
+        if ($.fn.DataTable.isDataTable('#dashboardRankTable')) {
+            $('#dashboardRankTable').DataTable().ajax.reload(null, false);
+        }
+    }, 60000);
+})();
+</script>
 {% endblock %}

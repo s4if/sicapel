@@ -1,0 +1,43 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ "Edit Tahun Ajaran" if academic_year else "Tambah Tahun Ajaran" }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ "Edit Tahun Ajaran" if academic_year else "Tambah Tahun Ajaran" }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif, render_field %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">{{ "Edit Tahun Ajaran" if academic_year else "Tambah Tahun Ajaran" }}</h4>
+
+<form method="POST"
+      action="{{ url_for('academic_years.edit', id=academic_year.id) if academic_year else url_for('academic_years.tambah') }}"
+      hx-post="{{ url_for('academic_years.edit', id=academic_year.id) if academic_year else url_for('academic_years.tambah') }}"
+      hx-target="#hx_content" hx-swap="innerHTML">
+  {{ form.hidden_tag() }}
+
+  {{ render_field(form.year) }}
+
+  <div class="row">
+    <div class="col-md-6">
+      {{ render_field(form.start_date) }}
+    </div>
+    <div class="col-md-6">
+      {{ render_field(form.end_date) }}
+    </div>
+  </div>
+
+  <div class="mb-3 form-check">
+    {{ form.is_active(class='form-check-input') }}
+    {{ form.is_active.label(class='form-check-label') }}
+  </div>
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a class="btn btn-secondary" href="{{ url_for('academic_years.index') }}"
+       hx-get="{{ url_for('academic_years.index') }}" hx-target="#hx_content" hx-swap="innerHTML">Batal</a>
+  </div>
+</form>
+{% endblock %}

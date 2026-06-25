@@ -1,0 +1,55 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Jenis Pelanggaran &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Jenis Pelanggaran &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Jenis Pelanggaran</h4>
+  <a class="btn btn-primary" href="{{ url_for('violation_types.tambah') }}"
+     hx-get="{{ url_for('violation_types.tambah') }}" hx-target="#hx_content" hx-swap="innerHTML">
+    <i class="bi bi-plus-lg"></i> Tambah Jenis
+  </a>
+</div>
+
+<table id="violationTypesTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>Nama</th>
+      <th>Kategori</th>
+      <th>Poin Default</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+(function() {
+    if ($.fn.DataTable.isDataTable('#violationTypesTable')) {
+        $('#violationTypesTable').DataTable().destroy();
+        $('#violationTypesTable').empty();
+    }
+    $('#violationTypesTable').DataTable({
+        ajax: { url: '{{ url_for("violation_types.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'name' },
+            { data: 'category' },
+            { data: 'default_points' },
+            { data: 'is_active' },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'asc']]
+    });
+})();
+</script>
+{% endblock %}

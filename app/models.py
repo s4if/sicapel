@@ -201,8 +201,12 @@ class WarningLetter(db.Model):
     academic_year_id = db.Column(
         db.Integer, db.ForeignKey("academic_years.id"), nullable=False
     )
-    signed_warning_doc_id = db.Column(db.Integer, db.ForeignKey("documents.id"))
-    signed_statement_doc_id = db.Column(db.Integer, db.ForeignKey("documents.id"))
+    signed_warning_doc_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", use_alter=True)
+    )
+    signed_statement_doc_id = db.Column(
+        db.Integer, db.ForeignKey("documents.id", use_alter=True)
+    )
     status = db.Column(
         _enum(WARNING_LETTER_STATUSES, "warning_letter_status"),
         nullable=False,
@@ -276,7 +280,7 @@ class Document(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     violation_record_id = db.Column(db.Integer, db.ForeignKey("violation_records.id"))
-    warning_letter_id = db.Column(db.Integer, db.ForeignKey("warning_letters.id"))
+    warning_letter_id = db.Column(db.Integer, db.ForeignKey("warning_letters.id", use_alter=True))
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     mime_type = db.Column(db.String(120), nullable=False)

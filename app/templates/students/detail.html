@@ -1,0 +1,93 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ student.name }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ student.name }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">{{ student.name }}</h4>
+  <div class="d-flex gap-2">
+    {% if current_user.role in ('admin', 'guru_bk') %}
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('students.edit', id=student.id) }}"
+       hx-get="{{ url_for('students.edit', id=student.id) }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-pencil"></i> Edit
+    </a>
+    {% endif %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('students.index') }}"
+       hx-get="{{ url_for('students.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-arrow-left"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Pribadi</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:140px">NIS</th><td>{{ student.nis }}</td></tr>
+          <tr><th>NISN</th><td>{{ student.nisn or '-' }}</td></tr>
+          <tr><th>Jenis Kelamin</th><td>{{ 'Laki-laki' if student.gender == 'L' else 'Perempuan' }}</td></tr>
+          <tr><th>Tempat, Tgl Lahir</th><td>{{ student.birth_place or '-' }}{% if student.birth_date %}, {{ student.birth_date }}{% endif %}</td></tr>
+          <tr><th>Alamat</th><td>{{ student.address or '-' }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Akademik</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:140px">Kelas</th><td>{{ student.class_.name if student.class_ else '-' }}</td></tr>
+          <tr><th>Status</th><td>{{ student.status.capitalize() }}</td></tr>
+          <tr><th>Tanggal Masuk</th><td>{{ student.enrolled_at or '-' }}</td></tr>
+          <tr><th>Orang Tua</th><td>{{ student.parent_name or '-' }}</td></tr>
+          <tr><th>No. Telp Orang Tua</th><td>{{ student.parent_phone or '-' }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><strong>Ringkasan Poin</strong></div>
+  <div class="card-body">
+    {% if summary %}
+    <div class="row text-center">
+      <div class="col-4">
+        <div class="fs-3 fw-bold {% if summary.total_points > 200 %}text-danger{% elif summary.total_points > 0 %}text-warning{% else %}text-success{% endif %}">
+          {{ summary.total_points }}
+        </div>
+        <div class="text-muted">Total Poin</div>
+      </div>
+      <div class="col-4">
+        <div class="fs-3 fw-bold">
+          {% if summary.current_sp_level %}
+            SP{{ summary.current_sp_level }}
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        <div class="text-muted">SP Saat Ini</div>
+      </div>
+      <div class="col-4">
+        <div class="fs-3 fw-bold {% if summary.is_expelled %}text-danger{% else %}text-success{% endif %}">
+          {% if summary.is_expelled %}Ya{% else %}Tidak{% endif %}
+        </div>
+        <div class="text-muted">Ekspulsi</div>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">Belum ada data pelanggaran.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

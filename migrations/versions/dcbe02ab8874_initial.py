@@ -1,8 +1,8 @@
-"""initial schema
+"""initial
 
-Revision ID: 928e132ff17a
+Revision ID: dcbe02ab8874
 Revises: 
-Create Date: 2026-06-18 09:13:08.667453
+Create Date: 2026-06-25 08:39:05.734747
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '928e132ff17a'
+revision = 'dcbe02ab8874'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -27,22 +27,6 @@ def upgrade():
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('year')
-    )
-    op.create_table('documents',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('violation_record_id', sa.Integer(), nullable=True),
-    sa.Column('warning_letter_id', sa.Integer(), nullable=True),
-    sa.Column('file_name', sa.String(length=255), nullable=False),
-    sa.Column('file_path', sa.String(length=500), nullable=False),
-    sa.Column('mime_type', sa.String(length=120), nullable=False),
-    sa.Column('file_size', sa.Integer(), nullable=False),
-    sa.Column('document_type', sa.Enum('evidence_photo', 'evidence_video', 'signed_warning_letter', 'signed_statement_letter', 'signed_amnesty_letter', name='document_type', create_constraint=True), nullable=False),
-    sa.Column('uploaded_by', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['violation_record_id'], ['violation_records.id'], ),
-    sa.ForeignKeyConstraint(['warning_letter_id'], ['warning_letters.id'], ),
-    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -67,35 +51,6 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
-    op.create_table('warning_letters',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('letter_number', sa.String(length=60), nullable=False),
-    sa.Column('letter_seq', sa.Integer(), nullable=False),
-    sa.Column('student_id', sa.Integer(), nullable=False),
-    sa.Column('level', sa.Enum('SP1', 'SP2', 'SP3', name='warning_letter_level', create_constraint=True), nullable=False),
-    sa.Column('trigger_violation_record_id', sa.Integer(), nullable=False),
-    sa.Column('total_points_at_issue', sa.Integer(), nullable=False),
-    sa.Column('reason', sa.Text(), nullable=True),
-    sa.Column('issued_by', sa.Integer(), nullable=False),
-    sa.Column('issue_date', sa.Date(), nullable=False),
-    sa.Column('academic_year_id', sa.Integer(), nullable=False),
-    sa.Column('signed_warning_doc_id', sa.Integer(), nullable=True),
-    sa.Column('signed_statement_doc_id', sa.Integer(), nullable=True),
-    sa.Column('status', sa.Enum('issued', 'signed_returned', 'void', name='warning_letter_status', create_constraint=True), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['academic_year_id'], ['academic_years.id'], ),
-    sa.ForeignKeyConstraint(['issued_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['signed_statement_doc_id'], ['documents.id'], ),
-    sa.ForeignKeyConstraint(['signed_warning_doc_id'], ['documents.id'], ),
-    sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
-    sa.ForeignKeyConstraint(['trigger_violation_record_id'], ['violation_records.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('academic_year_id', 'letter_seq', name='uq_warning_letters_year_seq')
-    )
-    with op.batch_alter_table('warning_letters', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_warning_letters_student_id'), ['student_id'], unique=False)
-
     op.create_table('classes',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=60), nullable=False),
@@ -146,33 +101,6 @@ def upgrade():
     with op.batch_alter_table('students', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_students_class_id'), ['class_id'], unique=False)
 
-    op.create_table('point_amnesties',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('letter_number', sa.String(length=60), nullable=False),
-    sa.Column('letter_seq', sa.Integer(), nullable=False),
-    sa.Column('student_id', sa.Integer(), nullable=False),
-    sa.Column('points_reduced', sa.Integer(), nullable=False),
-    sa.Column('reason_category', sa.Enum('prestasi', 'perilaku_baik', 'kerja_bakti', 'lainnya', name='amnesty_reason_category', create_constraint=True), nullable=False),
-    sa.Column('reason', sa.Text(), nullable=True),
-    sa.Column('sp_reset', sa.Boolean(), nullable=False),
-    sa.Column('principal_name', sa.String(length=120), nullable=False),
-    sa.Column('recorded_by', sa.Integer(), nullable=False),
-    sa.Column('issue_date', sa.Date(), nullable=False),
-    sa.Column('academic_year_id', sa.Integer(), nullable=False),
-    sa.Column('signed_document_id', sa.Integer(), nullable=False),
-    sa.Column('status', sa.Enum('issued', 'void', name='amnesty_status', create_constraint=True), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['academic_year_id'], ['academic_years.id'], ),
-    sa.ForeignKeyConstraint(['recorded_by'], ['users.id'], ),
-    sa.ForeignKeyConstraint(['signed_document_id'], ['documents.id'], ),
-    sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('academic_year_id', 'letter_seq', name='uq_point_amnesties_year_seq')
-    )
-    with op.batch_alter_table('point_amnesties', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_point_amnesties_student_id'), ['student_id'], unique=False)
-
     op.create_table('student_point_summaries',
     sa.Column('student_id', sa.Integer(), nullable=False),
     sa.Column('total_points', sa.Integer(), nullable=False),
@@ -216,6 +144,51 @@ def upgrade():
         batch_op.create_index('ix_violation_records_created_at', ['created_at'], unique=False)
         batch_op.create_index(batch_op.f('ix_violation_records_student_id'), ['student_id'], unique=False)
 
+    op.create_table('documents',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('violation_record_id', sa.Integer(), nullable=True),
+    sa.Column('warning_letter_id', sa.Integer(), nullable=True),
+    sa.Column('file_name', sa.String(length=255), nullable=False),
+    sa.Column('file_path', sa.String(length=500), nullable=False),
+    sa.Column('mime_type', sa.String(length=120), nullable=False),
+    sa.Column('file_size', sa.Integer(), nullable=False),
+    sa.Column('document_type', sa.Enum('evidence_photo', 'evidence_video', 'signed_warning_letter', 'signed_statement_letter', 'signed_amnesty_letter', name='document_type', create_constraint=True), nullable=False),
+    sa.Column('uploaded_by', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['uploaded_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['violation_record_id'], ['violation_records.id'], ),
+    sa.ForeignKeyConstraint(['warning_letter_id'], ['warning_letters.id'], use_alter=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('warning_letters',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('letter_number', sa.String(length=60), nullable=False),
+    sa.Column('letter_seq', sa.Integer(), nullable=False),
+    sa.Column('student_id', sa.Integer(), nullable=False),
+    sa.Column('level', sa.Enum('SP1', 'SP2', 'SP3', name='warning_letter_level', create_constraint=True), nullable=False),
+    sa.Column('trigger_violation_record_id', sa.Integer(), nullable=False),
+    sa.Column('total_points_at_issue', sa.Integer(), nullable=False),
+    sa.Column('reason', sa.Text(), nullable=True),
+    sa.Column('issued_by', sa.Integer(), nullable=False),
+    sa.Column('issue_date', sa.Date(), nullable=False),
+    sa.Column('academic_year_id', sa.Integer(), nullable=False),
+    sa.Column('signed_warning_doc_id', sa.Integer(), nullable=True),
+    sa.Column('signed_statement_doc_id', sa.Integer(), nullable=True),
+    sa.Column('status', sa.Enum('issued', 'signed_returned', 'void', name='warning_letter_status', create_constraint=True), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['academic_year_id'], ['academic_years.id'], ),
+    sa.ForeignKeyConstraint(['issued_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['signed_statement_doc_id'], ['documents.id'], use_alter=True),
+    sa.ForeignKeyConstraint(['signed_warning_doc_id'], ['documents.id'], use_alter=True),
+    sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
+    sa.ForeignKeyConstraint(['trigger_violation_record_id'], ['violation_records.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('academic_year_id', 'letter_seq', name='uq_warning_letters_year_seq')
+    )
+    with op.batch_alter_table('warning_letters', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_warning_letters_student_id'), ['student_id'], unique=False)
+
     op.create_table('expulsion_recommendations',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('letter_number', sa.String(length=60), nullable=False),
@@ -241,15 +214,51 @@ def upgrade():
     with op.batch_alter_table('expulsion_recommendations', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_expulsion_recommendations_student_id'), ['student_id'], unique=False)
 
+    op.create_table('point_amnesties',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('letter_number', sa.String(length=60), nullable=False),
+    sa.Column('letter_seq', sa.Integer(), nullable=False),
+    sa.Column('student_id', sa.Integer(), nullable=False),
+    sa.Column('points_reduced', sa.Integer(), nullable=False),
+    sa.Column('reason_category', sa.Enum('prestasi', 'perilaku_baik', 'kerja_bakti', 'lainnya', name='amnesty_reason_category', create_constraint=True), nullable=False),
+    sa.Column('reason', sa.Text(), nullable=True),
+    sa.Column('sp_reset', sa.Boolean(), nullable=False),
+    sa.Column('principal_name', sa.String(length=120), nullable=False),
+    sa.Column('recorded_by', sa.Integer(), nullable=False),
+    sa.Column('issue_date', sa.Date(), nullable=False),
+    sa.Column('academic_year_id', sa.Integer(), nullable=False),
+    sa.Column('signed_document_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.Enum('issued', 'void', name='amnesty_status', create_constraint=True), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['academic_year_id'], ['academic_years.id'], ),
+    sa.ForeignKeyConstraint(['recorded_by'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['signed_document_id'], ['documents.id'], ),
+    sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('academic_year_id', 'letter_seq', name='uq_point_amnesties_year_seq')
+    )
+    with op.batch_alter_table('point_amnesties', schema=None) as batch_op:
+        batch_op.create_index(batch_op.f('ix_point_amnesties_student_id'), ['student_id'], unique=False)
+
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
+    with op.batch_alter_table('point_amnesties', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_point_amnesties_student_id'))
+
+    op.drop_table('point_amnesties')
     with op.batch_alter_table('expulsion_recommendations', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_expulsion_recommendations_student_id'))
 
     op.drop_table('expulsion_recommendations')
+    with op.batch_alter_table('warning_letters', schema=None) as batch_op:
+        batch_op.drop_index(batch_op.f('ix_warning_letters_student_id'))
+
+    op.drop_table('warning_letters')
+    op.drop_table('documents')
     with op.batch_alter_table('violation_records', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_violation_records_student_id'))
         batch_op.drop_index('ix_violation_records_created_at')
@@ -261,10 +270,6 @@ def downgrade():
         batch_op.drop_index(batch_op.f('ix_student_point_summaries_total_points'))
 
     op.drop_table('student_point_summaries')
-    with op.batch_alter_table('point_amnesties', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_point_amnesties_student_id'))
-
-    op.drop_table('point_amnesties')
     with op.batch_alter_table('students', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_students_class_id'))
 
@@ -274,12 +279,7 @@ def downgrade():
         batch_op.drop_index(batch_op.f('ix_classes_homeroom_teacher_id'))
 
     op.drop_table('classes')
-    with op.batch_alter_table('warning_letters', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_warning_letters_student_id'))
-
-    op.drop_table('warning_letters')
     op.drop_table('violation_categories')
     op.drop_table('users')
-    op.drop_table('documents')
     op.drop_table('academic_years')
     # ### end Alembic commands ###

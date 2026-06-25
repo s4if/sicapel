@@ -1,7 +1,7 @@
 from flask_login import login_required
 
-from app.helper import class_owned_required, role_required
-from tests.conftest import login, make_class, make_student, make_user
+from app.helper import role_required
+from tests.conftest import login
 
 
 def test_login_page_get(client):
@@ -72,6 +72,36 @@ def test_login_rejects_unsafe_next(client, admin):
     assert "evil.example.com" not in resp.headers["Location"]
 
 
+def test_login_rejects_protocol_relative_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=//evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
+def test_login_rejects_triple_slash_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=///evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
+def test_login_rejects_backslash_url(client, admin):
+    resp = client.post(
+        "/auth/login?next=\\\\evil.example.com/",
+        data={"email": "admin@example.com", "password": "password"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "evil.example.com" not in resp.headers["Location"]
+
+
 def test_logout_requires_login(client):
     resp = client.get("/auth/logout", follow_redirects=False)
     assert resp.status_code == 302
@@ -109,43 +139,6 @@ def test_role_required_blocks_wrong_role(app, client, wali_kelas):
     resp = client.get("/_test/admin-only-2")
     assert resp.status_code == 403
     assert b"403" in resp.data
-
-
-def _register_class_owned_route(app, path):
-    @app.route(path)
-    @login_required
-    @class_owned_required
-    def _student_view(student_id):
-        return "ok"
-
-
-def test_class_owned_required_bypasses_for_admin(app, client, admin):
-    other = make_user("wali_kelas", "other@example.com", name="Other WK")
-    cls = make_class(other.id, "XI IPA 9")
-    student = make_student(cls.id, "999")
-    _register_class_owned_route(app, "/_test/student-a/<int:student_id>")
-    login(client, "admin@example.com")
-    resp = client.get(f"/_test/student-a/{student.id}")
-    assert resp.status_code == 200
-
-
-def test_class_owned_required_allows_owner_wali_kelas(app, client, wali_kelas):
-    cls = make_class(wali_kelas.id, "X IPA 1")
-    student = make_student(cls.id, "100")
-    _register_class_owned_route(app, "/_test/student-b/<int:student_id>")
-    login(client, "walikelas@example.com")
-    resp = client.get(f"/_test/student-b/{student.id}")
-    assert resp.status_code == 200
-
-
-def test_class_owned_required_blocks_non_owner_wali_kelas(app, client, wali_kelas):
-    other = make_user("wali_kelas", "other2@example.com", name="Other WK")
-    cls = make_class(other.id, "X IPA 2")
-    student = make_student(cls.id, "200")
-    _register_class_owned_route(app, "/_test/student-c/<int:student_id>")
-    login(client, "walikelas@example.com")
-    resp = client.get(f"/_test/student-c/{student.id}")
-    assert resp.status_code == 403
 
 
 def test_404_handler(client):

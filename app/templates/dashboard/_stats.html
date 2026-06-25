@@ -1,0 +1,37 @@
+{# HTMX-polled stat cards partial (T15 / §1.8).
+   Re-rendered every 60 s via the hx-trigger on #dashboard-stats in index.html.
+   ``stats`` is the dict returned by _compute_stats(). #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-bold text-primary">{{ stats.total_students }}</div>
+        <div class="text-muted small">Total Siswa</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-bold text-warning">{{ stats.students_with_sp }}</div>
+        <div class="text-muted small">Dengan SP Aktif</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100 border-danger">
+      <div class="card-body">
+        <div class="fs-3 fw-bold text-danger">{{ stats.alert_students }}</div>
+        <div class="text-muted small">Peringatan (&gt;{{ stats.alert_threshold }} Poin)</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-bold text-secondary">{{ stats.expelled_students }}</div>
+        <div class="text-muted small">Dikeluarkan</div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,111 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Pemutihan Poin &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Pemutihan Poin &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Pemutihan Poin</h4>
+  <a class="btn btn-primary btn-sm" href="{{ url_for('amnesties.tambah') }}"
+     hx-get="{{ url_for('amnesties.tambah') }}" hx-target="#hx_content" hx-swap="innerHTML">
+    <i class="bi bi-plus-lg"></i> Tambah Pemutihan
+  </a>
+</div>
+
+<div class="alert alert-light border small text-muted">
+  <i class="bi bi-info-circle"></i>
+  Pemutihan mengurangi poin siswa (dapat menjadi negatif) berdasarkan surat
+  Kepala Sekolah. Centang <strong>Reset SP</strong> untuk mengosongkan level SP
+  aktif. Scan surat bertanda tangan wajib diunggah (§1.6).
+</div>
+
+<table id="amnestiesTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>No. Surat</th>
+      <th>Siswa</th>
+      <th>Kelas</th>
+      <th>Poin Dikurangi</th>
+      <th>Reset SP</th>
+      <th>Kepala Sekolah</th>
+      <th>Tanggal</th>
+      <th>Status</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="modal fade" id="modalVoid" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Konfirmasi</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="modalVoidBody"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalVoidForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalVoid')).hide()"
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger" id="modalVoidBtn">Void</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var void_amnesty = (el) => {
+    var url = el.dataset.url;
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
+    setConfirmBody('modalVoidBody', 'Yakin membatalkan pemutihan ', el.dataset.nomor, '?');
+    document.getElementById('modalVoidBtn').textContent = 'Void';
+    document.getElementById('modalVoidBtn').className = 'btn btn-warning';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
+var recover_amnesty = (el) => {
+    var url = el.dataset.url;
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
+    setConfirmBody('modalVoidBody', 'Yakin memulihkan pemutihan ', el.dataset.nomor, '?');
+    document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
+    document.getElementById('modalVoidBtn').className = 'btn btn-success';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
+(function() {
+    if ($.fn.DataTable.isDataTable('#amnestiesTable')) {
+        $('#amnestiesTable').DataTable().destroy();
+        $('#amnestiesTable').empty();
+    }
+    $('#amnestiesTable').DataTable({
+        ajax: { url: '{{ url_for("amnesties.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'letter_number' },
+            { data: 'student' },
+            { data: 'class' },
+            { data: 'points_reduced' },
+            { data: 'sp_reset' },
+            { data: 'principal' },
+            { data: 'issue_date' },
+            { data: 'status', orderable: false, searchable: false },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'desc']]
+    });
+})();
+</script>
+{% endblock %}

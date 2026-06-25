@@ -1,0 +1,53 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Kelas &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Kelas &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Data Kelas</h4>
+  <a class="btn btn-primary" href="{{ url_for('classes.tambah') }}"
+     hx-get="{{ url_for('classes.tambah') }}" hx-target="#hx_content" hx-swap="innerHTML">
+    <i class="bi bi-plus-lg"></i> Tambah Kelas
+  </a>
+</div>
+
+<table id="classesTable" class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>No</th>
+      <th>Nama Kelas</th>
+      <th>Tingkat</th>
+      <th>Wali Kelas</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+(function() {
+    if ($.fn.DataTable.isDataTable('#classesTable')) {
+        $('#classesTable').DataTable().destroy();
+        $('#classesTable').empty();
+    }
+    $('#classesTable').DataTable({
+        ajax: { url: '{{ url_for("classes.data") }}', dataSrc: 'data' },
+        columns: [
+            { data: 'no' },
+            { data: 'name' },
+            { data: 'grade_level' },
+            { data: 'homeroom_teacher' },
+            { data: 'actions', orderable: false, searchable: false }
+        ],
+        order: [[0, 'asc']]
+    });
+})();
+</script>
+{% endblock %}

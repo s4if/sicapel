@@ -1,0 +1,148 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}{{ amnesty.letter_number }} &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>{{ amnesty.letter_number }} &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Pemutihan Poin</h4>
+  <div class="d-flex gap-2">
+    {% if current_user.role in ('admin', 'guru_bk') %}
+      {% if amnesty.status != 'void' %}
+      <button class="btn btn-outline-warning btn-sm" type="button"
+              data-nomor="{{ amnesty.letter_number }}"
+              data-url="{{ url_for('amnesties.void', id=amnesty.id) }}"
+              onclick="void_amnesty(this)">
+        <i class="bi bi-x-circle"></i> Batalkan
+      </button>
+      {% else %}
+      <button class="btn btn-outline-success btn-sm" type="button"
+              data-nomor="{{ amnesty.letter_number }}"
+              data-url="{{ url_for('amnesties.recover', id=amnesty.id) }}"
+              onclick="recover_amnesty(this)">
+        <i class="bi bi-arrow-counterclockwise"></i> Pulihkan
+      </button>
+      {% endif %}
+    {% endif %}
+    <a class="btn btn-outline-danger btn-sm" href="{{ url_for('amnesties.pdf', id=amnesty.id) }}"
+       target="_blank" hx-boost="false">
+      <i class="bi bi-file-pdf"></i> Cetak PDF
+    </a>
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('amnesties.index') }}"
+       hx-get="{{ url_for('amnesties.index') }}" hx-target="#hx_content" hx-swap="innerHTML">
+      <i class="bi bi-arrow-left"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Surat</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:170px">No. Surat</th><td>{{ amnesty.letter_number }}</td></tr>
+          <tr><th>Tanggal Surat</th><td>{{ amnesty.issue_date }}</td></tr>
+          <tr><th>Tahun Ajaran</th><td>{{ amnesty.academic_year.year if amnesty.academic_year else '-' }}</td></tr>
+          <tr><th>Dicatat Oleh</th><td>{{ amnesty.recorded_by_user.name if amnesty.recorded_by_user else '-' }}</td></tr>
+          <tr><th>Kepala Sekolah</th><td>{{ amnesty.principal_name }}</td></tr>
+          <tr><th>Poin Dikurangi</th><td><strong>{{ amnesty.points_reduced }}</strong></td></tr>
+          <tr><th>Reset SP</th><td>{% if amnesty.sp_reset %}<span class="badge bg-info text-dark">Ya</span>{% else %}<span class="badge bg-light text-dark border">Tidak</span>{% endif %}</td></tr>
+          <tr><th>Status</th><td>{% if amnesty.status == 'void' %}<span class="badge bg-secondary">Batal</span>{% else %}<span class="badge bg-success">Diterbitkan</span>{% endif %}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><strong>Alasan</strong></div>
+      <div class="card-body">
+        <p class="mb-1 text-muted small">Kategori: {{ amnesty.reason_category.replace('_', ' ').title() }}</p>
+        <p class="mb-0">{{ amnesty.reason or '-' }}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header"><strong>Data Siswa</strong></div>
+      <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tr><th style="width:170px">NIS</th><td>{{ amnesty.student.nis }}</td></tr>
+          <tr><th>Nama</th><td>{{ amnesty.student.name }}</td></tr>
+          <tr><th>Kelas</th><td>{{ amnesty.student.class_.name if amnesty.student.class_ else '-' }}</td></tr>
+          <tr><th>Status</th><td>{{ amnesty.student.status.capitalize() }}</td></tr>
+          {% if summary %}
+          <tr><th>Total Poin Saat Ini</th><td><strong>{{ summary.total_points }}</strong></td></tr>
+          <tr><th>Level SP Saat Ini</th><td>{% if summary.current_sp_level %}SP{{ summary.current_sp_level }}{% else %}-{% endif %}</td></tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><strong>Dokumen Surat Bertanda Tangan</strong></div>
+      <div class="card-body">
+        {% if amnesty.signed_document %}
+        <div class="border rounded p-3">
+          <i class="bi bi-file-earmark-pdf"></i>
+          <span>{{ amnesty.signed_document.file_name }}</span>
+          <div class="text-muted small">{{ amnesty.signed_document.mime_type }} &middot; {{ amnesty.signed_document.file_size }} byte</div>
+        </div>
+        {% else %}
+        <span class="text-muted">Belum ada dokumen.</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalVoid" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Konfirmasi</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="modalVoidBody"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalVoidForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalVoid')).hide()"
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger" id="modalVoidBtn">Void</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<script>
+var void_amnesty = (el) => {
+    var url = el.dataset.url;
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
+    setConfirmBody('modalVoidBody', 'Yakin membatalkan pemutihan ', el.dataset.nomor, '?');
+    document.getElementById('modalVoidBtn').textContent = 'Void';
+    document.getElementById('modalVoidBtn').className = 'btn btn-warning';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
+var recover_amnesty = (el) => {
+    var url = el.dataset.url;
+    document.getElementById('modalVoidForm').action = url;
+    document.getElementById('modalVoidForm').setAttribute('hx-post', url);
+    htmx.process(document.getElementById('modalVoidForm'));
+    setConfirmBody('modalVoidBody', 'Yakin memulihkan pemutihan ', el.dataset.nomor, '?');
+    document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
+    document.getElementById('modalVoidBtn').className = 'btn btn-success';
+    new bootstrap.Modal(document.getElementById('modalVoid')).show();
+};
+</script>
+{% endblock %}
