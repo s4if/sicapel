@@ -81,6 +81,22 @@
     }
   });
 
+  /* ---------- Confirm-modal body builder (XSS-safe) ---------- *
+   * Builds "<prefix><strong>{label}</strong><suffix>" without
+   * innerHTML + string concatenation, so user-controlled text is
+   * always inserted as inert text (textContent), never parsed as HTML.
+   * R9: confirm modals read the label from a data-* attribute and write
+   * it here via textContent. */
+  window.setConfirmBody = function (targetId, prefix, label, suffix) {
+    var body = document.getElementById(targetId);
+    body.innerHTML = "";
+    body.appendChild(document.createTextNode(prefix));
+    var strong = document.createElement("strong");
+    strong.textContent = label;
+    body.appendChild(strong);
+    body.appendChild(document.createTextNode(suffix || ""));
+  };
+
   /* Re-sync after HTMX content swaps. */
   document.body.addEventListener("htmx:afterSettle", syncSidebarActive);
 })();

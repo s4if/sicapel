@@ -63,12 +63,12 @@ def tambah():
     from .. import db
 
     user = User(
-        name=sanitize(form.name.data),
-        email=sanitize(form.email.data),
+        name=form.name.data,
+        email=form.email.data,
         password_hash=hash_password(form.password.data),
         role=form.role.data,
-        nip=sanitize(form.nip.data) if form.nip.data else None,
-        phone=sanitize(form.phone.data) if form.phone.data else None,
+        nip=form.nip.data or None,
+        phone=form.phone.data or None,
     )
     db.session.add(user)
     db.session.commit()
@@ -95,11 +95,11 @@ def edit(id):
     if not form.validate_on_submit():
         return hx_render("users/form.html", form=form, user=user)
 
-    user.name = sanitize(form.name.data)
-    user.email = sanitize(form.email.data)
+    user.name = form.name.data
+    user.email = form.email.data
     user.role = form.role.data
-    user.nip = sanitize(form.nip.data) if form.nip.data else None
-    user.phone = sanitize(form.phone.data) if form.phone.data else None
+    user.nip = form.nip.data or None
+    user.phone = form.phone.data or None
     db.session.commit()
 
     return hx_render(

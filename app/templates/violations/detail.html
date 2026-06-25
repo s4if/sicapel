@@ -16,12 +16,14 @@
     {% if current_user.role in ('admin', 'guru_bk') %}
       {% if not record.is_void %}
       <button class="btn btn-outline-danger btn-sm" type="button"
-              onclick="hapus_violation({{ record.id }}, '{{ record.student.name }}')">
+              data-id="{{ record.id }}" data-nama="{{ record.student.name }}"
+              onclick="hapus_violation(this)">
         <i class="bi bi-x-circle"></i> Batalkan
       </button>
       {% else %}
       <button class="btn btn-outline-success btn-sm" type="button"
-              onclick="pulihkan_violation({{ record.id }}, '{{ record.student.name }}')">
+              data-id="{{ record.id }}" data-nama="{{ record.student.name }}"
+              onclick="pulihkan_violation(this)">
         <i class="bi bi-arrow-counterclockwise"></i> Pulihkan
       </button>
       {% endif %}
@@ -123,20 +125,24 @@
 </div>
 
 <script>
-var hapus_violation = (id, nama) => {
+var hapus_violation = (el) => {
+    var id = el.dataset.id;
+    var nama = el.dataset.nama;
     document.getElementById('modalHapusForm').action = id + '/void';
     document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/void');
     htmx.process(document.getElementById('modalHapusForm'));
-    document.getElementById('modalHapusBody').innerHTML = 'Yakin membatalkan pelanggaran <strong>' + nama + '</strong>?';
+    setConfirmBody('modalHapusBody', 'Yakin membatalkan pelanggaran ', nama, '?');
     document.getElementById('modalHapusBtn').textContent = 'Void';
     document.getElementById('modalHapusBtn').className = 'btn btn-danger';
     new bootstrap.Modal(document.getElementById('modalHapus')).show();
 };
-var pulihkan_violation = (id, nama) => {
+var pulihkan_violation = (el) => {
+    var id = el.dataset.id;
+    var nama = el.dataset.nama;
     document.getElementById('modalHapusForm').action = id + '/recover';
     document.getElementById('modalHapusForm').setAttribute('hx-post', id + '/recover');
     htmx.process(document.getElementById('modalHapusForm'));
-    document.getElementById('modalHapusBody').innerHTML = 'Yakin memulihkan pelanggaran <strong>' + nama + '</strong>?';
+    setConfirmBody('modalHapusBody', 'Yakin memulihkan pelanggaran ', nama, '?');
     document.getElementById('modalHapusBtn').textContent = 'Pulihkan';
     document.getElementById('modalHapusBtn').className = 'btn btn-success';
     new bootstrap.Modal(document.getElementById('modalHapus')).show();

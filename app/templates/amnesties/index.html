@@ -65,20 +65,22 @@
 </div>
 
 <script>
-var void_amnesty = (id, nomor, url) => {
+var void_amnesty = (el) => {
+    var url = el.dataset.url;
     document.getElementById('modalVoidForm').action = url;
     document.getElementById('modalVoidForm').setAttribute('hx-post', url);
     htmx.process(document.getElementById('modalVoidForm'));
-    document.getElementById('modalVoidBody').innerHTML = 'Yakin membatalkan pemutihan <strong>' + nomor + '</strong>?';
+    setConfirmBody('modalVoidBody', 'Yakin membatalkan pemutihan ', el.dataset.nomor, '?');
     document.getElementById('modalVoidBtn').textContent = 'Void';
     document.getElementById('modalVoidBtn').className = 'btn btn-warning';
     new bootstrap.Modal(document.getElementById('modalVoid')).show();
 };
-var recover_amnesty = (id, nomor, url) => {
+var recover_amnesty = (el) => {
+    var url = el.dataset.url;
     document.getElementById('modalVoidForm').action = url;
     document.getElementById('modalVoidForm').setAttribute('hx-post', url);
     htmx.process(document.getElementById('modalVoidForm'));
-    document.getElementById('modalVoidBody').innerHTML = 'Yakin memulihkan pemutihan <strong>' + nomor + '</strong>?';
+    setConfirmBody('modalVoidBody', 'Yakin memulihkan pemutihan ', el.dataset.nomor, '?');
     document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
     document.getElementById('modalVoidBtn').className = 'btn btn-success';
     new bootstrap.Modal(document.getElementById('modalVoid')).show();

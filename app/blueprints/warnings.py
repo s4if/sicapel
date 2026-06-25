@@ -48,8 +48,9 @@ def _row_actions(w):
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
         f'<button class="btn btn-outline-warning" type="button" '
-        f"onclick=\"void_warning({w.id}, '{sanitize(w.letter_number)}', '{url_for('warnings.void', id=w.id)}')\" "
-        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
+        f'data-nomor="{sanitize(w.letter_number)}" '
+        f'data-url="{url_for("warnings.void", id=w.id)}" '
+        f'onclick="void_warning(this)" title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
     return actions
@@ -136,7 +137,7 @@ def void(id):
     db.session.commit()
     return hx_render(
         "warnings/index.html",
-        success=f"Surat {sanitize(w.letter_number)} dibatalkan.",
+        success=f"Surat {w.letter_number} dibatalkan.",
     )
 
 
@@ -156,7 +157,7 @@ def recover(id):
     db.session.commit()
     return hx_render(
         "warnings/index.html",
-        success=f"Surat {sanitize(w.letter_number)} dipulihkan.",
+        success=f"Surat {w.letter_number} dipulihkan.",
     )
 
 

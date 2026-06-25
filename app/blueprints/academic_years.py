@@ -69,7 +69,7 @@ def tambah():
         )
 
     ay = AcademicYear(
-        year=sanitize(form.year.data),
+        year=form.year.data,
         start_date=form.start_date.data,
         end_date=form.end_date.data,
         is_active=form.is_active.data,
@@ -106,7 +106,7 @@ def edit(id):
             {"is_active": False}, synchronize_session=False
         )
 
-    ay.year = sanitize(form.year.data)
+    ay.year = form.year.data
     ay.start_date = form.start_date.data
     ay.end_date = form.end_date.data
     ay.is_active = form.is_active.data

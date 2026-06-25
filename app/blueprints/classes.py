@@ -73,7 +73,7 @@ def tambah():
     from .. import db
 
     cls = Class(
-        name=sanitize(form.name.data),
+        name=form.name.data,
         grade_level=form.grade_level.data,
         homeroom_teacher_id=form.homeroom_teacher_id.data,
     )
@@ -103,7 +103,7 @@ def edit(id):
     if not form.validate_on_submit():
         return hx_render("classes/form.html", form=form, cls=cls)
 
-    cls.name = sanitize(form.name.data)
+    cls.name = form.name.data
     cls.grade_level = form.grade_level.data
     cls.homeroom_teacher_id = form.homeroom_teacher_id.data
     db.session.commit()

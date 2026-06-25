@@ -38,9 +38,7 @@ def hx_render(template, push_url=None, **kwargs):
     if push_url:
         resp = make_response(render_template(template, **kwargs))
         resp.headers["HX-Push-Url"] = (
-            push_url
-            if push_url.startswith(("/", "http"))
-            else url_for(push_url)
+            push_url if push_url.startswith(("/", "http")) else url_for(push_url)
         )
         return resp
     return render_template(template, **kwargs)
@@ -61,22 +59,24 @@ def role_required(*roles):
     return decorator
 
 
-def class_owned_required(view):
-    @functools.wraps(view)
-    def wrapped(student_id, **kwargs):
-        if current_user.role == "wali_kelas":
-            from . import db
-            from .models import Student
-
-            s = db.get_or_404(Student, student_id)
-            if s.class_.homeroom_teacher_id != current_user.id:
-                return hx_render("errors/403.html"), 403
-        return view(student_id=student_id, **kwargs)
-
-    return wrapped
-
-
 def current_academic_year():
     from .models import AcademicYear
 
     return AcademicYear.query.filter_by(is_active=True).first()
+
+
+def scope_students_to_role(query):
+    """Restrict a ``Student`` query to the current user's class when they are
+    a ``wali_kelas`` (§1.1). admin / guru_bk are returned unscoped.
+
+    R12 — joins ``Class`` explicitly; ``Student.class_.homeroom_teacher_id``
+    is not a valid filter expression under SQLAlchemy 2.x (a relationship's
+    comparator exposes no sub-columns). See §6.3.
+    """
+    if current_user.role == "wali_kelas":
+        from .models import Class, Student
+
+        query = query.join(Class, Student.class_id == Class.id).filter(
+            Class.homeroom_teacher_id == current_user.id
+        )
+    return query

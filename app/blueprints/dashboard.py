@@ -19,7 +19,7 @@ the scoping in every other blueprint); admin & guru_bk see everyone.
 from flask import Blueprint, jsonify, url_for
 from flask_login import current_user, login_required
 
-from ..helper import hx_render, sanitize
+from ..helper import hx_render, sanitize, scope_students_to_role
 from ..models import Class, Student, StudentPointSummary
 
 bp = Blueprint("dashboard", __name__, url_prefix="/dashboard")
@@ -29,16 +29,12 @@ _ALERT_THRESHOLD = 200
 
 
 def _scope_students():
-    """Student query scoped to the current user's data access (§1.1)."""
-    q = Student.query
-    if current_user.role == "wali_kelas":
-        # Explicit join on Class — ``Student.class_.homeroom_teacher_id`` is not
-        # a valid filter expression under SQLAlchemy 2.x's relationship
-        # comparator, so join the Class table directly on the FK.
-        q = q.join(Class, Student.class_id == Class.id).filter(
-            Class.homeroom_teacher_id == current_user.id
-        )
-    return q
+    """Student query scoped to the current user's data access (§1.1).
+
+    Delegates to ``scope_students_to_role`` so the R12 join lives in exactly
+    one place; admin / guru_bk are returned unscoped.
+    """
+    return scope_students_to_role(Student.query)
 
 
 def _scope_summaries():
@@ -76,9 +72,7 @@ def _compute_stats():
         .count()
     )
 
-    expelled_students = (
-        _scope_students().filter(Student.status == "expelled").count()
-    )
+    expelled_students = _scope_students().filter(Student.status == "expelled").count()
 
     return {
         "total_students": total_students,
@@ -140,13 +134,9 @@ def data():
                 "no": i,
                 "nis": sanitize(student.nis),
                 "name": sanitize(student.name),
-                "class": sanitize(student.class_.name)
-                if student.class_
-                else "-",
+                "class": sanitize(student.class_.name) if student.class_ else "-",
                 "points": s.total_points,
-                "sp": f"SP{s.current_sp_level}"
-                if s.current_sp_level
-                else "-",
+                "sp": f"SP{s.current_sp_level}" if s.current_sp_level else "-",
                 "status": student.status.capitalize(),
                 "alert": s.total_points > _ALERT_THRESHOLD,
                 "actions": _row_actions(student.id),

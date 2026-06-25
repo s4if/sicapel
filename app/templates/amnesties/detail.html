@@ -16,12 +16,16 @@
     {% if current_user.role in ('admin', 'guru_bk') %}
       {% if amnesty.status != 'void' %}
       <button class="btn btn-outline-warning btn-sm" type="button"
-              onclick="void_amnesty({{ amnesty.id }}, '{{ amnesty.letter_number }}', '{{ url_for('amnesties.void', id=amnesty.id) }}')">
+              data-nomor="{{ amnesty.letter_number }}"
+              data-url="{{ url_for('amnesties.void', id=amnesty.id) }}"
+              onclick="void_amnesty(this)">
         <i class="bi bi-x-circle"></i> Batalkan
       </button>
       {% else %}
       <button class="btn btn-outline-success btn-sm" type="button"
-              onclick="recover_amnesty({{ amnesty.id }}, '{{ amnesty.letter_number }}', '{{ url_for('amnesties.recover', id=amnesty.id) }}')">
+              data-nomor="{{ amnesty.letter_number }}"
+              data-url="{{ url_for('amnesties.recover', id=amnesty.id) }}"
+              onclick="recover_amnesty(this)">
         <i class="bi bi-arrow-counterclockwise"></i> Pulihkan
       </button>
       {% endif %}
@@ -120,20 +124,22 @@
 </div>
 
 <script>
-var void_amnesty = (id, nomor, url) => {
+var void_amnesty = (el) => {
+    var url = el.dataset.url;
     document.getElementById('modalVoidForm').action = url;
     document.getElementById('modalVoidForm').setAttribute('hx-post', url);
     htmx.process(document.getElementById('modalVoidForm'));
-    document.getElementById('modalVoidBody').innerHTML = 'Yakin membatalkan pemutihan <strong>' + nomor + '</strong>?';
+    setConfirmBody('modalVoidBody', 'Yakin membatalkan pemutihan ', el.dataset.nomor, '?');
     document.getElementById('modalVoidBtn').textContent = 'Void';
     document.getElementById('modalVoidBtn').className = 'btn btn-warning';
     new bootstrap.Modal(document.getElementById('modalVoid')).show();
 };
-var recover_amnesty = (id, nomor, url) => {
+var recover_amnesty = (el) => {
+    var url = el.dataset.url;
     document.getElementById('modalVoidForm').action = url;
     document.getElementById('modalVoidForm').setAttribute('hx-post', url);
     htmx.process(document.getElementById('modalVoidForm'));
-    document.getElementById('modalVoidBody').innerHTML = 'Yakin memulihkan pemutihan <strong>' + nomor + '</strong>?';
+    setConfirmBody('modalVoidBody', 'Yakin memulihkan pemutihan ', el.dataset.nomor, '?');
     document.getElementById('modalVoidBtn').textContent = 'Pulihkan';
     document.getElementById('modalVoidBtn').className = 'btn btn-success';
     new bootstrap.Modal(document.getElementById('modalVoid')).show();

@@ -11,9 +11,21 @@ from wtforms import (
     TextAreaField,
     TimeField,
 )
-from wtforms.validators import DataRequired, Email, NumberRange, Optional
+from wtforms.validators import (
+    DataRequired,
+    Email,
+    NumberRange,
+    Optional,
+    ValidationError,
+)
 
-from .models import AMNESTY_REASON_CATEGORIES, SEMESTERS, STUDENT_STATUSES, USER_ROLES
+from .models import (
+    AMNESTY_REASON_CATEGORIES,
+    SEMESTERS,
+    STUDENT_STATUSES,
+    USER_ROLES,
+    ViolationCategory,
+)
 
 
 class LoginForm(FlaskForm):
@@ -101,6 +113,23 @@ class ViolationTypeForm(FlaskForm):
     is_active = BooleanField("Aktif", default=True)
     submit = SubmitField("Simpan")
 
+    def validate_default_points(self, field):
+        # §1.2: default_points must fit the chosen category's
+        # [min_points, max_points] window (sangat_berat forces exactly 200).
+        from . import db
+
+        try:
+            cat = db.session.get(ViolationCategory, self.category_id.data)
+        except (TypeError, ValueError):
+            return  # category_id itself invalid; DataRequired handles it
+        if cat is None:
+            return
+        if not (cat.min_points <= field.data <= cat.max_points):
+            raise ValidationError(
+                f"Poin harus antara {cat.min_points} dan {cat.max_points} "
+                f"untuk kategori {cat.name}."
+            )
+
 
 class AcademicYearForm(FlaskForm):
     year = StringField("Tahun Ajaran", validators=[DataRequired()])
@@ -108,6 +137,20 @@ class AcademicYearForm(FlaskForm):
     end_date = DateField("Tanggal Selesai", validators=[DataRequired()], format="%Y-%m-%d")
     is_active = BooleanField("Aktif (jadikan tahun ajaran berjalan)")
     submit = SubmitField("Simpan")
+
+    def validate(self, **kwargs):
+        if not super().validate(**kwargs):
+            return False
+        if (
+            self.start_date.data
+            and self.end_date.data
+            and self.end_date.data <= self.start_date.data
+        ):
+            self.end_date.errors.append(
+                "Tanggal selesai harus setelah tanggal mulai."
+            )
+            return False
+        return True
 
 
 class ViolationRecordForm(FlaskForm):

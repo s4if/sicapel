@@ -40,8 +40,9 @@ def _row_actions(e):
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
         f'<button class="btn btn-outline-warning" type="button" '
-        f"onclick=\"void_expulsion({e.id}, '{sanitize(e.letter_number)}', '{url_for('expulsion.void', id=e.id)}')\" "
-        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
+        f'data-nomor="{sanitize(e.letter_number)}" '
+        f'data-url="{url_for("expulsion.void", id=e.id)}" '
+        f'onclick="void_expulsion(this)" title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
 
@@ -125,7 +126,7 @@ def void(id):
     db.session.commit()
     return hx_render(
         "expulsion/index.html",
-        success=f"Rekomendasi ekspulsi {sanitize(e.letter_number)} dibatalkan.",
+        success=f"Rekomendasi ekspulsi {e.letter_number} dibatalkan.",
     )
 
 
@@ -143,5 +144,5 @@ def recover(id):
     db.session.commit()
     return hx_render(
         "expulsion/index.html",
-        success=f"Rekomendasi ekspulsi {sanitize(e.letter_number)} dipulihkan.",
+        success=f"Rekomendasi ekspulsi {e.letter_number} dipulihkan.",
     )

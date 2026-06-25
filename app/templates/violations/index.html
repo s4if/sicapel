@@ -55,11 +55,11 @@
 </div>
 
 <script>
-var hapus_violation = (id, nama, url) => {
-    console.log(url);
+var hapus_violation = (el) => {
+    var url = el.dataset.url;
     document.getElementById('modalHapusForm').action = url;
     document.getElementById('modalHapusForm').setAttribute('hx-post', url);
-    document.getElementById('modalHapusBody').innerHTML = 'Yakin membatalkan pelanggaran <strong>' + nama + '</strong>?';
+    setConfirmBody('modalHapusBody', 'Yakin membatalkan pelanggaran ', el.dataset.nama, '?');
     document.getElementById('modalHapusBtn').textContent = 'Void';
     document.getElementById('modalHapusBtn').className = 'btn btn-danger';
     htmx.process(document.getElementById('modalHapusForm'));

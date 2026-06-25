@@ -7,6 +7,7 @@ from ..helper import (
     hx_render,
     role_required,
     sanitize,
+    scope_students_to_role,
 )
 from ..models import (
     Class,
@@ -21,11 +22,8 @@ bp = Blueprint("violations", __name__, url_prefix="/pelanggaran")
 
 
 def _student_choices():
-    q = Student.query.filter(Student.status != "expelled").order_by(
-        Student.name
-    )
-    if current_user.role == "wali_kelas":
-        q = q.filter(Student.class_.homeroom_teacher_id == current_user.id)
+    q = Student.query.filter(Student.status != "expelled").order_by(Student.name)
+    q = scope_students_to_role(q)
     return [(s.id, f"{s.name} ({s.nis} - {s.class_.name})") for s in q.all()]
 
 
@@ -53,7 +51,9 @@ def _row_actions(v):
         f'hx-get="{detail_url}" hx-target="#hx_content" hx-swap="innerHTML">'
         f'<i class="bi bi-eye"></i></a>'
         f'<button class="btn btn-outline-danger" type="button" '
-        f"onclick=\"hapus_violation({v.id}, '{sanitize(v.student.name)}', '{url_for('violations.void', id=v.id)}')\">"
+        f'data-nama="{sanitize(v.student.name)}" '
+        f'data-url="{url_for("violations.void", id=v.id)}" '
+        f'onclick="hapus_violation(this)">'
         f'<i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
@@ -72,13 +72,13 @@ def index():
 def data():
     q = ViolationRecord.query.filter_by(is_void=False)
     if current_user.role == "wali_kelas":
-        q = q.join(Student).filter(
-            Student.class_.homeroom_teacher_id == current_user.id
+        q = (
+            q.join(Student)
+            .join(Class, Student.class_id == Class.id)
+            .filter(Class.homeroom_teacher_id == current_user.id)
         )
     rows = []
-    for i, v in enumerate(
-        q.order_by(ViolationRecord.created_at.desc()).all(), 1
-    ):
+    for i, v in enumerate(q.order_by(ViolationRecord.created_at.desc()).all(), 1):
         rows.append(
             {
                 "no": i,
@@ -117,9 +117,23 @@ def preview_points():
     sp_level = None
 
     if student_id:
-        summary = StudentPointSummary.query.filter_by(
-            student_id=student_id
-        ).first()
+        # Ownership guard (inline): a wali_kelas may only preview points for
+        # a student in their own class.
+        if current_user.role == "wali_kelas":
+            from .. import db
+
+            owned = (
+                db.session.query(Student.id)
+                .join(Class)
+                .filter(
+                    Student.id == student_id,
+                    Class.homeroom_teacher_id == current_user.id,
+                )
+                .first()
+            )
+            if not owned:
+                return hx_render("errors/403.html"), 403
+        summary = StudentPointSummary.query.filter_by(student_id=student_id).first()
         level = summary.current_sp_level if summary else None
         total = summary.total_points if summary else 0
 
@@ -204,8 +218,8 @@ def tambah():
         student_id=form.student_id.data,
         violation_type_id=form.violation_type_id.data,
         points=form.points.data,
-        chronology=sanitize(form.chronology.data),
-        location=sanitize(form.location.data),
+        chronology=form.chronology.data,
+        location=form.location.data,
         incident_date=form.incident_date.data,
         incident_time=form.incident_time.data,
         academic_year_id=ay.id,
@@ -217,15 +231,11 @@ def tambah():
 
     notif = {"success": "Pelanggaran dicatat."}
     if result.get("new_warning"):
-        notif["info"] = (
-            f"SP{result['new_warning'].level} diterbitkan untuk siswa."
-        )
+        notif["info"] = f"SP{result['new_warning'].level} diterbitkan untuk siswa."
     if result.get("student_expelled"):
         notif["error"] = "Siswa dikeluarkan &mdash; surat rekomendasi terbit."
 
-    return hx_render(
-        "violations/index.html", push_url="violations.index", **notif
-    )
+    return hx_render("violations/index.html", push_url="violations.index", **notif)
 
 
 @bp.route("/<int:id>")
@@ -238,19 +248,18 @@ def detail(id):
         v = (
             db.session.query(ViolationRecord)
             .join(Student)
+            .join(Class, Student.class_id == Class.id)
             .filter(
                 ViolationRecord.id == id,
                 ViolationRecord.is_void.is_(False),
-                Student.class_.homeroom_teacher_id == current_user.id,
+                Class.homeroom_teacher_id == current_user.id,
             )
             .first_or_404()
         )
     else:
         v = db.get_or_404(ViolationRecord, id)
 
-    summary = StudentPointSummary.query.filter_by(
-        student_id=v.student_id
-    ).first()
+    summary = StudentPointSummary.query.filter_by(student_id=v.student_id).first()
     return hx_render("violations/detail.html", record=v, summary=summary)
 
 
@@ -273,7 +282,7 @@ def void(id):
 
     return hx_render(
         "violations/index.html",
-        success=f"Pelanggaran {sanitize(v.violation_type.name)} untuk {sanitize(v.student.name)} dibatalkan.",
+        success=f"Pelanggaran {v.violation_type.name} untuk {v.student.name} dibatalkan.",
     )
 
 
@@ -296,5 +305,5 @@ def recover(id):
 
     return hx_render(
         "violations/index.html",
-        success=f"Pelanggaran {sanitize(v.violation_type.name)} untuk {sanitize(v.student.name)} dipulihkan.",
+        success=f"Pelanggaran {v.violation_type.name} untuk {v.student.name} dipulihkan.",
     )

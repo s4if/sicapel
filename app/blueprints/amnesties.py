@@ -60,8 +60,9 @@ def _row_actions(a):
         f'<a class="btn btn-outline-danger" href="{pdf_url}" target="_blank" '
         f'hx-boost="false" title="Cetak PDF"><i class="bi bi-file-pdf"></i></a>'
         f'<button class="btn btn-outline-warning" type="button" '
-        f"onclick=\"void_amnesty({a.id}, '{sanitize(a.letter_number)}', '{url_for('amnesties.void', id=a.id)}')\" "
-        f'title="Batalkan"><i class="bi bi-x-circle"></i></button>'
+        f'data-nomor="{sanitize(a.letter_number)}" '
+        f'data-url="{url_for("amnesties.void", id=a.id)}" '
+        f'onclick="void_amnesty(this)" title="Batalkan"><i class="bi bi-x-circle"></i></button>'
         f"</div>"
     )
 
@@ -148,9 +149,9 @@ def tambah():
         student_id=form.student_id.data,
         points_reduced=form.points_reduced.data,
         sp_reset=bool(form.sp_reset.data),
-        reason=sanitize(form.reason.data) if form.reason.data else "",
+        reason=form.reason.data or "",
         reason_category=form.reason_category.data,
-        principal_name=sanitize(form.principal_name.data),
+        principal_name=form.principal_name.data,
         issue_date=form.issue_date.data,
         academic_year_id=ay.id,
         recorded_by=current_user.id,
@@ -214,7 +215,7 @@ def void(id):
     db.session.commit()
     return hx_render(
         "amnesties/index.html",
-        success=f"Pemutihan {sanitize(a.letter_number)} dibatalkan.",
+        success=f"Pemutihan {a.letter_number} dibatalkan.",
     )
 
 
@@ -235,5 +236,5 @@ def recover(id):
     db.session.commit()
     return hx_render(
         "amnesties/index.html",
-        success=f"Pemutihan {sanitize(a.letter_number)} dipulihkan.",
+        success=f"Pemutihan {a.letter_number} dipulihkan.",
     )
