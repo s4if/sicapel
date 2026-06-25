@@ -1,0 +1,75 @@
+# =============================================================================
+# SICAPEL — Docker Compose
+# =============================================================================
+# Usage:
+#   cp .env.example .env  # then edit SECRET_KEY
+#   docker compose up -d
+#
+# PostgreSQL   (default) — uncomment the `db` service below.
+# SQLite (standalone)    — comment out the `db` service and use the
+#                          alternative `app.environment` block.
+# =============================================================================
+
+services:
+  # ── Database (PostgreSQL) ────────────────────────────────────────────────
+  # Uncomment this block to use PostgreSQL:
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: sicapel
+  #     POSTGRES_USER: sicapel
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-sicapel}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U sicapel"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   restart: unless-stopped
+
+  # ── Application ───────────────────────────────────────────────────────────
+  app:
+    build: .
+    environment:
+      # ── PostgreSQL (uncomment when db service is enabled) ────────────
+      # DATABASE_URL: postgresql://sicapel:${DB_PASSWORD:-sicapel}@db:5432/sicapel
+
+      # ── SQLite (standalone, no external DB needed) ───────────────────
+      DATABASE_URL: sqlite:////app/instance/sicapel.sqlite
+
+      # ── Common ───────────────────────────────────────────────────────
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      UPLOAD_FOLDER: /var/lib/sicapel/uploads
+      SCHOOL_NAME: ${SCHOOL_NAME:-SICAPEL}
+    volumes:
+      - uploads:/var/lib/sicapel/uploads
+      - instance_data:/app/instance
+    # depends_on:        # uncomment when db service is enabled
+    #   db:
+    #     condition: service_healthy
+    # ── Expose gunicorn port directly when NOT using the compose nginx ──
+    # (e.g. host-installed nginx/Caddy or Cloudflare Tunnel; comment out
+    #  the nginx service below and use this instead):
+    # ports:
+    #   - "${APP_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  # ── Reverse proxy (nginx in Docker) ──────────────────────────────────────
+  # Comment out this service when using a host-installed reverse proxy
+  # (nginx/Caddy on the host) or Cloudflare Tunnel — see DEPLOYMENT.md §8.
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "${PORT:-80}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - uploads:/var/lib/sicapel/uploads:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  pgdata:             # PostgreSQL data (used when db service is enabled)
+  uploads:            # Persistent file uploads
+  instance_data:      # SQLite database persistence (used when SQLite mode is active)
