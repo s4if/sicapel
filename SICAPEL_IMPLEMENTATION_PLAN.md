@@ -22,7 +22,7 @@
 3. [Tech Stack (Final)](#3-tech-stack-final)
 4. [Architecture Decisions](#4-architecture-decisions)
 5. [Project Structure](#5-project-structure)
-6. [Rendering Pattern — Core Rules (R1–R11)](#6-rendering-pattern--core-rules-r1r11)
+6. [Rendering Pattern — Core Rules (R1–R12)](#6-rendering-pattern--core-rules-r1r12)
 7. [App Factory & Helper Layer](#7-app-factory--helper-layer)
 8. [Service Layer Contract](#8-service-layer-contract)
 9. [Blueprint Pattern](#9-blueprint-pattern)
@@ -453,7 +453,7 @@ sicapel/                         # project root
 
 ---
 
-## 6. Rendering Pattern — Core Rules (R1–R11)
+## 6. Rendering Pattern — Core Rules (R1–R12)
 
 These rules are invariants. Apply them verbatim to every route and template or the dual-mode contract breaks.
 
@@ -467,9 +467,10 @@ These rules are invariants. Apply them verbatim to every route and template or t
 | **R6** | In-content links carry BOTH `href` and `hx-get` pointing at the same URL, plus `hx-target="#hx_content"` + `hx-swap="innerHTML"`. |
 | **R7** | `<body>` carries `hx-boost="true"`; navigation links are progressively enhanced, never replaced. |
 | **R8** | CSRF token mandatory on every POST form via `{{ form.hidden_tag() }}` (WTForms) or an explicit `<input name="csrf_token" value="{{ csrf_token() }}">`. |
-| **R9** | User-supplied strings stored in DB or emitted into HTML/JS literals must pass through `sanitize()` first. |
+| **R9** | **Encode once, at the output layer, for the target context.** Store user strings **raw** in the DB. When emitting: **HTML text** → rely on Jinja autoescape (`{{ value }}`); do **not** pre-`sanitize()`. **HTML attribute** (incl. DataTables action-cell HTML built in Python) → `html.escape(quote=True)` (our `sanitize()`). **JS string literal** → never `html.escape`; use `data-*` attributes + `el.dataset.x` + `textContent` (preferred), or `\|tojson` if a literal is unavoidable. Never sanitize on write. Never sanitize twice. |
 | **R10** | The body always has exactly one swap target, `id="hx_content"`. |
 | **R11** | Page-specific JS (DataTables init, onclick helpers) lives **inside** `{% block content %}`, and every DataTable init is wrapped in a destroy-guard IIFE. |
+| **R12** | **Never dereference a column through a relationship in a query expression.** Under SQLAlchemy 2.x a relationship's comparator exposes no sub-columns, so `Model.relationship.column` in `filter()`/`filter_by()`/`order_by()` raises `AttributeError`. Join the related table explicitly on the FK (`.join(Related, Model.fk_id == Related.id)`) and filter on `Related.column`. Relationship traversal is only valid on a *loaded instance* (`obj.relationship.column`). |
 
 ### 6.1 The `is_htmx` truthiness contract
 
@@ -484,6 +485,31 @@ These rules are invariants. Apply them verbatim to every route and template or t
 | `/students/by-class/<int:class_id>` | JSON list | cascading select |
 | `<entity>/data` (all lists) | `jsonify(data=[...])` | DataTables feed |
 | `/<entity>/<id>/void` | HTML (re-rendered list via `hx_render`) | mutation but uses `hx_render` |
+
+### 6.3 Querying across a relationship (R12)
+
+A relationship attribute (e.g. `Student.class_`) behaves differently at the
+*instance* level vs. the *class/query* level. On a **loaded instance** the
+ORM lazy-loads on access, so `student.class_.name` is always fine (templates,
+f-strings). But in a **query expression** the ORM will not invent the JOIN for
+you — a relationship's comparator exposes no sub-columns, so
+`Student.query.filter(Student.class_.homeroom_teacher_id == x)` raises
+`AttributeError` at request time under SQLAlchemy 2.x.
+
+The canonical fix is an explicit join on the foreign key followed by a filter
+on the related table's column. See `app.helper.scope_students_to_role` and
+`app/blueprints/dashboard.py:_scope_students` for the reference pattern:
+
+```python
+q = Student.query.join(Class, Student.class_id == Class.id).filter(
+    Class.homeroom_teacher_id == current_user.id
+)
+```
+
+`Student.class_` is the only cross-table scope in this app and therefore the
+relationship most likely to be misused; when scoping a `Student` query to the
+wali-kelas's class, prefer the `scope_students_to_role()` helper so R12 is
+implemented in exactly one place.
 
 ---
 
@@ -765,8 +791,8 @@ def tambah():
         student_id=form.student_id.data,
         violation_type_id=form.violation_type_id.data,
         points=form.points.data,
-        chronology=sanitize(form.chronology.data),
-        location=sanitize(form.location.data),
+        chronology=form.chronology.data,  # R9: store raw; encode at output (autoescape / /data sanitize)
+        location=form.location.data,
         incident_date=form.incident_date.data,
         incident_time=form.incident_time.data,
         academic_year_id=current_academic_year().id,
@@ -962,7 +988,7 @@ var edit_violation = (id) => {
 **Key wiring facts:**
 - `/data` returns `jsonify(data=[...])` — the `data=` wrapper is mandatory; DataTables reads it via `dataSrc: 'data'`.
 - `actions` cells contain **pre-rendered HTML** built server-side; mark them `orderable: false, searchable: false`.
-- Every user-controlled value embedded in `onclick="fn('…')"` JS literals must pass through `sanitize()`.
+- **Do not interpolate user values into `onclick="fn('…')` JS string literals.** `html.escape`/`sanitize` does not protect a JS-string context. Put the value in a `data-*` attribute (attribute context, where `sanitize`/autoescape is correct) and read it in JS via `el.dataset.x`, then write it to the DOM with `textContent` (never `innerHTML` + concatenation).
 - `edit_<entity>(id)` builds the edit URL via the `id=0` slice trick (`url_for('...', id=0)` emits `.../0`; slice off the `0`, append real id).
 - The destroy-guard IIFE is the only thing that prevents `Cannot reinitialise DataTable` after HTMX re-swaps.
 
