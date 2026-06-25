@@ -14,6 +14,8 @@ from wtforms import (
 from wtforms.validators import (
     DataRequired,
     Email,
+    EqualTo,
+    Length,
     NumberRange,
     Optional,
     ValidationError,
@@ -35,6 +37,33 @@ class LoginForm(FlaskForm):
     )
     password = PasswordField("Password", validators=[DataRequired()])
     submit = SubmitField("Login")
+
+
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField("Password Saat Ini", validators=[DataRequired()])
+    new_password = PasswordField(
+        "Password Baru", validators=[DataRequired(), Length(min=8)]
+    )
+    confirm_password = PasswordField(
+        "Konfirmasi Password Baru",
+        validators=[
+            DataRequired(),
+            EqualTo(
+                "new_password",
+                message="Konfirmasi password tidak cocok dengan password baru.",
+            ),
+        ],
+    )
+    submit = SubmitField("Ubah Password")
+
+    def validate_new_password(self, field):
+        if (
+            self.current_password.data is not None
+            and field.data == self.current_password.data
+        ):
+            raise ValidationError(
+                "Password baru tidak boleh sama dengan password saat ini."
+            )
 
 
 class StudentForm(FlaskForm):

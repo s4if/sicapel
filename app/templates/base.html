@@ -30,6 +30,10 @@
         <div class="app-topbar-user ms-auto">
           <span class="text-truncate">{{ current_user.name }}</span>
           <span class="badge text-bg-secondary text-capitalize">{{ current_user.role }}</span>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('auth.change_password') }}"
+             hx-get="{{ url_for('auth.change_password') }}" hx-target="#hx_content" hx-swap="innerHTML">
+            <i class="bi bi-key"></i> Ubah Password
+          </a>
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('auth.logout') }}"
              hx-boost="false"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>

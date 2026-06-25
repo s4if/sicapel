@@ -3,8 +3,8 @@ from urllib.parse import urljoin, urlparse
 from flask import Blueprint, redirect, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from ..forms import LoginForm
-from ..helper import hx_render, verify_password
+from ..forms import ChangePasswordForm, LoginForm
+from ..helper import hash_password, hx_render, verify_password
 from ..models import User
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -49,3 +49,26 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    from .. import db
+
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not verify_password(form.current_password.data, current_user.password_hash):
+            return hx_render(
+                "auth/change_password.html",
+                form=form,
+                error="Password saat ini salah.",
+            )
+        current_user.password_hash = hash_password(form.new_password.data)
+        db.session.commit()
+        return hx_render(
+            "auth/change_password.html",
+            form=form,
+            success="Password berhasil diubah.",
+        )
+    return hx_render("auth/change_password.html", form=form)

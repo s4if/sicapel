@@ -1,6 +1,8 @@
 from flask_login import login_required
 
-from app.helper import role_required
+from app import db
+from app.helper import role_required, verify_password
+from app.models import User
 from tests.conftest import login
 
 
@@ -106,6 +108,121 @@ def test_logout_requires_login(client):
     resp = client.get("/auth/logout", follow_redirects=False)
     assert resp.status_code == 302
     assert "/auth/login" in resp.headers["Location"]
+
+
+def test_change_password_requires_login(client):
+    resp = client.get("/auth/change-password", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/auth/login" in resp.headers["Location"]
+
+
+def test_change_password_page_get(client, admin):
+    login(client, "admin@example.com")
+    resp = client.get("/auth/change-password")
+    assert resp.status_code == 200
+    assert b"Ubah Password" in resp.data
+
+
+def test_change_password_success(client, admin, app):
+    login(client, "admin@example.com")
+    resp = client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "password",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"berhasil" in resp.data
+
+    with app.app_context():
+        user = db.session.get(User, admin.id)
+        assert verify_password("newpassword123", user.password_hash)
+        assert not verify_password("password", user.password_hash)
+
+
+def test_change_password_wrong_current(client, admin, app):
+    login(client, "admin@example.com")
+    resp = client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "wrong",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"salah" in resp.data
+
+    with app.app_context():
+        user = db.session.get(User, admin.id)
+        assert verify_password("password", user.password_hash)
+
+
+def test_change_password_mismatched_confirm(client, admin):
+    login(client, "admin@example.com")
+    resp = client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "password",
+            "new_password": "newpassword123",
+            "confirm_password": "different",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"tidak cocok" in resp.data
+
+
+def test_change_password_new_same_as_current(client, admin):
+    login(client, "admin@example.com")
+    resp = client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "password",
+            "new_password": "password",
+            "confirm_password": "password",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"tidak boleh sama" in resp.data
+
+
+def test_change_password_too_short(client, admin, app):
+    login(client, "admin@example.com")
+    resp = client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "password",
+            "new_password": "short",
+            "confirm_password": "short",
+        },
+    )
+    assert resp.status_code == 200
+
+    with app.app_context():
+        user = db.session.get(User, admin.id)
+        assert verify_password("password", user.password_hash)
+
+
+def test_can_login_with_new_password(client, admin):
+    login(client, "admin@example.com")
+    client.post(
+        "/auth/change-password",
+        data={
+            "current_password": "password",
+            "new_password": "newpassword123",
+            "confirm_password": "newpassword123",
+        },
+    )
+    client.get("/auth/logout")
+    resp = client.post(
+        "/auth/login",
+        data={"email": "admin@example.com", "password": "newpassword123"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "/dashboard" in resp.headers["Location"]
 
 
 def test_logout_clears_session(client, admin):
