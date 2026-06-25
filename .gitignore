@@ -1,5 +1,4 @@
 instance/
-migrations/
 .zed/
 .venv/
 __pycache__/
