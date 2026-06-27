@@ -32,7 +32,54 @@
   <tbody></tbody>
 </table>
 
+<div class="modal fade" id="modalHapus" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Konfirmasi</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="modalHapusBody"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <form id="modalHapusForm" method="POST"
+            onsubmit="bootstrap.Modal.getInstance(document.getElementById('modalHapus')).hide()"
+            style="display:inline"
+            hx-target="#hx_content"
+            hx-swap="innerHTML">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="btn btn-danger" id="modalHapusBtn">Hapus</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
 <script>
+var hapus_data = (el) => {
+    var url = el.dataset.url;
+    var form = document.getElementById('modalHapusForm');
+    form.action = url;
+    form.setAttribute('hx-post', url);
+    htmx.process(form);
+    setConfirmBody('modalHapusBody', 'Yakin menghapus ', el.dataset.nama, '?');
+    var btn = document.getElementById('modalHapusBtn');
+    btn.textContent = 'Hapus';
+    btn.className = 'btn btn-danger';
+    new bootstrap.Modal(document.getElementById('modalHapus')).show();
+};
+
+var pulihkan_data = (el) => {
+    var url = el.dataset.url;
+    var form = document.getElementById('modalHapusForm');
+    form.action = url;
+    form.setAttribute('hx-post', url);
+    htmx.process(form);
+    setConfirmBody('modalHapusBody', 'Yakin memulihkan ', el.dataset.nama, '?');
+    var btn = document.getElementById('modalHapusBtn');
+    btn.textContent = 'Pulihkan';
+    btn.className = 'btn btn-success';
+    new bootstrap.Modal(document.getElementById('modalHapus')).show();
+};
+
 (function() {
     if ($.fn.DataTable.isDataTable('#violationTypesTable')) {
         $('#violationTypesTable').DataTable().destroy();
@@ -48,6 +95,11 @@
             { data: 'is_active' },
             { data: 'actions', orderable: false, searchable: false }
         ],
+        createdRow: function (row, data) {
+            if (data.is_deleted) {
+                row.classList.add('table-danger');
+            }
+        },
         order: [[0, 'asc']]
     });
 })();

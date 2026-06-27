@@ -41,6 +41,7 @@ class AcademicYear(db.Model):
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=False)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
 
@@ -54,6 +55,7 @@ class User(UserMixin, db.Model):
     role = db.Column(_enum(USER_ROLES, "user_role"), nullable=False)
     nip = db.Column(db.String(40))
     phone = db.Column(db.String(40))
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
     updated_at = db.Column(
         db.DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
@@ -69,6 +71,7 @@ class Class(db.Model):
     homeroom_teacher_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
     )
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
     homeroom_teacher = db.relationship("User")
@@ -94,6 +97,7 @@ class Student(db.Model):
     status = db.Column(
         _enum(STUDENT_STATUSES, "student_status"), nullable=False, default="active"
     )
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     enrolled_at = db.Column(db.Date)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
     updated_at = db.Column(
@@ -129,6 +133,7 @@ class ViolationType(db.Model):
     default_points = db.Column(db.Integer, nullable=False)
     description = db.Column(db.Text)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
     updated_at = db.Column(

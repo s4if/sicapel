@@ -7,11 +7,19 @@ from ..models import Class, Student, StudentPointSummary
 
 bp = Blueprint("students", __name__, url_prefix="/siswa")
 
+_LABEL = "Siswa"
+
+
+def _display(student):
+    return student.name
+
 
 def _class_choices():
     return [
         (c.id, f"{c.name} (Kelas {c.grade_level})")
-        for c in Class.query.order_by(Class.grade_level, Class.name).all()
+        for c in Class.query.filter(Class.is_deleted.is_(False))
+        .order_by(Class.grade_level, Class.name)
+        .all()
     ]
 
 
@@ -19,9 +27,48 @@ def _base_query():
     return scope_students_to_role(Student.query)
 
 
+def _related_counts(student_id):
+    from ..models import (
+        ExpulsionRecommendation,
+        PointAmnesty,
+        StudentPointSummary,
+        ViolationRecord,
+        WarningLetter,
+    )
+
+    return {
+        "pelanggaran": ViolationRecord.query.filter_by(
+            student_id=student_id
+        ).count(),
+        "surat peringatan": WarningLetter.query.filter_by(
+            student_id=student_id
+        ).count(),
+        "rekomendasi ekspulsi": ExpulsionRecommendation.query.filter_by(
+            student_id=student_id
+        ).count(),
+        "pemutihan": PointAmnesty.query.filter_by(student_id=student_id).count(),
+        "ringkasan poin": StudentPointSummary.query.filter_by(
+            student_id=student_id
+        ).count(),
+    }
+
+
 def _row_actions(student):
+    nama = sanitize(_display(student))
+    if getattr(student, "is_deleted", False):
+        restore_url = f"{student.id}/restore"
+        return (
+            f'<div class="btn-group btn-group-sm">'
+            f'<button class="btn btn-outline-success" type="button" '
+            f'onclick="pulihkan_data(this)" '
+            f'data-url="{restore_url}" data-nama="{nama}">'
+            f'<i class="bi bi-arrow-counterclockwise"></i></button>'
+            f"</div>"
+        )
+
     edit_url = f"{student.id}/edit"
     detail_url = f"{student.id}"
+    delete_url = f"{student.id}/delete"
     return (
         f'<div class="btn-group btn-group-sm">'
         f'<a class="btn btn-outline-info" href="{detail_url}" '
@@ -30,6 +77,10 @@ def _row_actions(student):
         f'<a class="btn btn-outline-primary" href="{edit_url}" '
         f'hx-get="{edit_url}" hx-target="#hx_content" hx-swap="innerHTML">'
         f'<i class="bi bi-pencil"></i></a>'
+        f'<button class="btn btn-outline-danger" type="button" '
+        f'onclick="hapus_data(this)" '
+        f'data-url="{delete_url}" data-nama="{nama}">'
+        f'<i class="bi bi-trash"></i></button>'
         f"</div>"
     )
 
@@ -58,6 +109,7 @@ def data():
                 "class": sanitize(s.class_.name) if s.class_ else "-",
                 "status": s.status.capitalize(),
                 "points": summary.total_points if summary else 0,
+                "is_deleted": s.is_deleted,
                 "actions": _row_actions(s),
             }
         )
@@ -163,6 +215,61 @@ def edit(id):
     )
 
 
+@bp.route("/<int:id>/delete", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def delete(id):
+    from .. import db
+
+    student = db.get_or_404(Student, id)
+
+    if student.is_deleted:
+        return hx_render(
+            "students/index.html", error="Data sudah dihapus sebelumnya."
+        )
+
+    display = _display(student)
+    related = _related_counts(student.id)
+    related_count = sum(related.values())
+
+    if related_count == 0:
+        db.session.delete(student)
+        db.session.commit()
+        return hx_render(
+            "students/index.html",
+            push_url="students.index",
+            success=f"{_LABEL} {display} berhasil dihapus secara permanen.",
+        )
+
+    student.is_deleted = True
+    db.session.commit()
+    detail = ", ".join(f"{k}: {v}" for k, v in related.items() if v > 0)
+    return hx_render(
+        "students/index.html",
+        push_url="students.index",
+        success=f"{_LABEL} {display} ditandai sebagai dihapus ({detail}).",
+    )
+
+
+@bp.route("/<int:id>/restore", methods=["POST"])
+@login_required
+@role_required("admin", "guru_bk")
+def restore(id):
+    from .. import db
+
+    student = db.get_or_404(Student, id)
+    if not student.is_deleted:
+        return hx_render("students/index.html", error="Data belum dihapus.")
+
+    student.is_deleted = False
+    db.session.commit()
+    return hx_render(
+        "students/index.html",
+        push_url="students.index",
+        success=f"{_LABEL} {_display(student)} berhasil dipulihkan.",
+    )
+
+
 @bp.route("/by-class/<int:class_id>")
 @login_required
 @role_required("admin", "guru_bk", "wali_kelas")
@@ -176,6 +283,7 @@ def by_class(class_id):
         return hx_render("errors/403.html"), 403
     students = (
         Student.query.filter_by(class_id=class_id, status="active")
+        .filter(Student.is_deleted.is_(False))
         .order_by(Student.name)
         .all()
     )

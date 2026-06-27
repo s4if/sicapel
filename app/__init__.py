@@ -2,7 +2,7 @@ import os
 
 from flask import Flask, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user, logout_user
 from flask_wtf import CSRFProtect
 from flask_migrate import Migrate
 
@@ -55,6 +55,17 @@ def create_app(test_config=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     htmx.init_app(app)
+
+    @app.before_request
+    def _reject_deleted_users():
+        # I5: a soft-deleted user loses access immediately, not at next login.
+        # Re-validates is_deleted on every authenticated request and kills any
+        # still-active session.
+        if current_user.is_authenticated and getattr(
+            current_user, "is_deleted", False
+        ):
+            logout_user()
+            return hx_render("errors/403.html"), 403
 
     from .blueprints import (
         academic_years,

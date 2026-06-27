@@ -22,7 +22,9 @@ bp = Blueprint("violations", __name__, url_prefix="/pelanggaran")
 
 
 def _student_choices():
-    q = Student.query.filter(Student.status != "expelled").order_by(Student.name)
+    q = Student.query.filter(
+        Student.status != "expelled", Student.is_deleted.is_(False)
+    ).order_by(Student.name)
     q = scope_students_to_role(q)
     return [(s.id, f"{s.name} ({s.nis} - {s.class_.name})") for s in q.all()]
 
@@ -30,7 +32,10 @@ def _student_choices():
 def _violation_type_choices():
     return [
         (vt.id, f"{vt.name} ({vt.category.name}, {vt.default_points} poin)")
-        for vt in ViolationType.query.filter_by(is_active=True)
+        for vt in ViolationType.query.filter(
+            ViolationType.is_active.is_(True),
+            ViolationType.is_deleted.is_(False),
+        )
         .order_by(ViolationType.name)
         .all()
     ]
@@ -39,7 +44,9 @@ def _violation_type_choices():
 def _class_choices():
     return [
         (c.id, f"{c.name} (Kelas {c.grade_level})")
-        for c in Class.query.order_by(Class.grade_level, Class.name).all()
+        for c in Class.query.filter(Class.is_deleted.is_(False))
+        .order_by(Class.grade_level, Class.name)
+        .all()
     ]
 
 
