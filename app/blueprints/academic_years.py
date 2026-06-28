@@ -279,6 +279,8 @@ def _source_classes(source_year_id):
         )
         .all()
     ]
+    if not source_class_ids:
+        return []
     return (
         Class.query.filter(
             Class.id.in_(source_class_ids), Class.is_deleted.is_(False)
