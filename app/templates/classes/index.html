@@ -25,6 +25,7 @@
       <th>Nama Kelas</th>
       <th>Tingkat</th>
       <th>Wali Kelas</th>
+      <th>Tahun Ajaran</th>
       <th>Aksi</th>
     </tr>
   </thead>
@@ -91,6 +92,7 @@ var pulihkan_data = (el) => {
             { data: 'name' },
             { data: 'grade_level' },
             { data: 'homeroom_teacher' },
+            { data: 'academic_year' },
             { data: 'actions', orderable: false, searchable: false }
         ],
         createdRow: function (row, data) {

@@ -87,6 +87,8 @@ def index():
 @login_required
 @role_required("admin")
 def data():
+    ay = current_academic_year()
+    ay_label = sanitize(ay.year) if ay else "-"
     rows = []
     for i, c in enumerate(
         Class.query.order_by(Class.grade_level, Class.name).all(), 1
@@ -99,6 +101,7 @@ def data():
                 "homeroom_teacher": sanitize(c.homeroom_teacher.name)
                 if c.homeroom_teacher
                 else "-",
+                "academic_year": ay_label,
                 "is_deleted": c.is_deleted,
                 "actions": _row_actions(c),
             }

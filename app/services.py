@@ -658,9 +658,12 @@ def promote_academic_year(
         teacher_user = session.get(User, _teacher)
         if teacher_user is None or teacher_user.is_deleted or teacher_user.role != "wali_kelas":
             raise ValueError(f"Wali kelas dengan ID {_teacher} tidak valid atau tidak ditemukan.")
+
+    existing = session.scalar(
+        select(func.count()).select_from(ClassEnrollment).where(
+            ClassEnrollment.academic_year_id == target_year_id,
         )
-        or 0
-    )
+    ) or 0
     if existing:
         raise ValueError(
             "Tahun ajaran tujuan sudah memiliki data kelas — rollover sudah dilakukan."
