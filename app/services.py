@@ -648,12 +648,16 @@ def promote_academic_year(
     if target_year is None:
         raise ValueError("Tahun ajaran tujuan tidak ditemukan.")
 
-    # Idempotency: the target year must not already have enrollments.
-    existing = (
-        session.scalar(
-            select(func.count(ClassEnrollment.id)).where(
-                ClassEnrollment.academic_year_id == target_year_id
-            )
+    # D-C5: every mapped target class must pre-exist (no auto-create).
+    from .models import User
+    for src_cid, (tgt_cid, _teacher) in class_map.items():
+        if session.get(Class, src_cid) is None:
+            raise ValueError(f"Kelas asal {src_cid} tidak ditemukan.")
+        if session.get(Class, tgt_cid) is None:
+            raise ValueError(f"Kelas tujuan {tgt_cid} tidak ditemukan.")
+        teacher_user = session.get(User, _teacher)
+        if teacher_user is None or teacher_user.is_deleted or teacher_user.role != "wali_kelas":
+            raise ValueError(f"Wali kelas dengan ID {_teacher} tidak valid atau tidak ditemukan.")
         )
         or 0
     )
