@@ -32,9 +32,12 @@ def _scope_students():
     """Student query scoped to the current user's data access (§1.1).
 
     Delegates to ``scope_students_to_role`` so the R12 join lives in exactly
-    one place; admin / guru_bk are returned unscoped.
+    one place; admin / guru_bk are returned unscoped. I2: soft-deleted
+    students are excluded from live monitoring counts.
     """
-    return scope_students_to_role(Student.query)
+    return scope_students_to_role(Student.query).filter(
+        Student.is_deleted.is_(False)
+    )
 
 
 def _scope_summaries():
@@ -42,8 +45,11 @@ def _scope_summaries():
 
     A summary row only exists for students who have at least one violation or
     amnesty, so this is the right base for SP / point / expulsion stats.
+    I2: soft-deleted students are excluded from live aggregation.
     """
-    q = StudentPointSummary.query.join(Student)
+    q = StudentPointSummary.query.join(Student).filter(
+        Student.is_deleted.is_(False)
+    )
     if current_user.role == "wali_kelas":
         q = q.join(Class, Student.class_id == Class.id).filter(
             Class.homeroom_teacher_id == current_user.id

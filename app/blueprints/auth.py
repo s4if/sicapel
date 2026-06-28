@@ -36,6 +36,12 @@ def login():
             return hx_render(
                 "auth/login.html", form=form, error="Email atau password salah."
             )
+        if user.is_deleted:
+            return hx_render(
+                "auth/login.html",
+                form=form,
+                error="Akun telah dinonaktifkan. Hubungi admin.",
+            )
         login_user(user)
         target = request.args.get("next")
         if not target or not _is_safe_url(target):

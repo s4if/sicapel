@@ -3,9 +3,51 @@ from flask_login import current_user, login_required
 
 from ..forms import ViolationTypeForm
 from ..helper import hx_render, role_required, sanitize
-from ..models import ViolationCategory, ViolationType
+from ..models import ViolationCategory, ViolationRecord, ViolationType
 
 bp = Blueprint("violation_types", __name__, url_prefix="/jenis-pelanggaran")
+
+_LABEL = "Jenis pelanggaran"
+
+
+def _display(vt):
+    return vt.name
+
+
+def _related_counts(violation_type_id):
+    return {
+        "pelanggaran": ViolationRecord.query.filter_by(
+            violation_type_id=violation_type_id
+        ).count()
+    }
+
+
+def _row_actions(vt):
+    nama = sanitize(_display(vt))
+    if getattr(vt, "is_deleted", False):
+        restore_url = f"{vt.id}/restore"
+        return (
+            f'<div class="btn-group btn-group-sm">'
+            f'<button class="btn btn-outline-success" type="button" '
+            f'onclick="pulihkan_data(this)" '
+            f'data-url="{restore_url}" data-nama="{nama}">'
+            f'<i class="bi bi-arrow-counterclockwise"></i></button>'
+            f"</div>"
+        )
+
+    edit_url = f"{vt.id}/edit"
+    delete_url = f"{vt.id}/delete"
+    return (
+        f'<div class="btn-group btn-group-sm">'
+        f'<a class="btn btn-outline-primary" href="{edit_url}" '
+        f'hx-get="{edit_url}" hx-target="#hx_content" hx-swap="innerHTML">'
+        f'<i class="bi bi-pencil"></i></a>'
+        f'<button class="btn btn-outline-danger" type="button" '
+        f'onclick="hapus_data(this)" '
+        f'data-url="{delete_url}" data-nama="{nama}">'
+        f'<i class="bi bi-trash"></i></button>'
+        f"</div>"
+    )
 
 
 def _category_choices():
@@ -13,17 +55,6 @@ def _category_choices():
         (c.id, f"{c.name.capitalize()} ({c.min_points}-{c.max_points} poin)")
         for c in ViolationCategory.query.order_by(ViolationCategory.id).all()
     ]
-
-
-def _row_actions(vt):
-    edit_url = f"{vt.id}/edit"
-    return (
-        f'<div class="btn-group btn-group-sm">'
-        f'<a class="btn btn-outline-primary" href="{edit_url}" '
-        f'hx-get="{edit_url}" hx-target="#hx_content" hx-swap="innerHTML">'
-        f'<i class="bi bi-pencil"></i></a>'
-        f"</div>"
-    )
 
 
 @bp.route("/")
@@ -48,6 +79,7 @@ def data():
                 "category": vt.category.name.capitalize() if vt.category else "-",
                 "default_points": vt.default_points,
                 "is_active": "Aktif" if vt.is_active else "Nonaktif",
+                "is_deleted": vt.is_deleted,
                 "actions": _row_actions(vt),
             }
         )
@@ -118,4 +150,61 @@ def edit(id):
         "violation_types/index.html",
         push_url="violation_types.index",
         success=f"Jenis pelanggaran {vt.name} berhasil diperbarui.",
+    )
+
+
+@bp.route("/<int:id>/delete", methods=["POST"])
+@login_required
+@role_required("admin")
+def delete(id):
+    from .. import db
+
+    vt = db.get_or_404(ViolationType, id)
+
+    if vt.is_deleted:
+        return hx_render(
+            "violation_types/index.html", error="Data sudah dihapus sebelumnya."
+        )
+
+    display = _display(vt)
+    related = _related_counts(vt.id)
+    related_count = sum(related.values())
+
+    if related_count == 0:
+        db.session.delete(vt)
+        db.session.commit()
+        return hx_render(
+            "violation_types/index.html",
+            push_url="violation_types.index",
+            success=f"{_LABEL} {display} berhasil dihapus secara permanen.",
+        )
+
+    vt.is_deleted = True
+    db.session.commit()
+    detail = ", ".join(f"{k}: {v}" for k, v in related.items() if v > 0)
+    return hx_render(
+        "violation_types/index.html",
+        push_url="violation_types.index",
+        success=f"{_LABEL} {display} ditandai sebagai dihapus ({detail}).",
+    )
+
+
+@bp.route("/<int:id>/restore", methods=["POST"])
+@login_required
+@role_required("admin")
+def restore(id):
+    from .. import db
+
+    vt = db.get_or_404(ViolationType, id)
+    if not vt.is_deleted:
+        return hx_render("violation_types/index.html", error="Data belum dihapus.")
+
+    # I1: is_deleted is independent of is_active; restoring never flips a
+    # deliberately-deactivated type back to active.
+    vt.is_deleted = False
+    db.session.commit()
+    return hx_render(
+        "violation_types/index.html",
+        push_url="violation_types.index",
+        success=f"{_LABEL} {_display(vt)} berhasil dipulihkan.",
     )
