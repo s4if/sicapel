@@ -8,6 +8,7 @@ from .helper import hash_password
 from .models import (
     AcademicYear,
     Class,
+    ClassEnrollment,
     Document,
     Student,
     User,
@@ -15,7 +16,7 @@ from .models import (
     ViolationRecord,
     ViolationType,
 )
-from .services import apply_amnesty, recompute_summary, record_violation
+from .services import apply_amnesty, enroll_student, recompute_summary, record_violation
 
 _CATEGORIES = [
     {
@@ -332,6 +333,34 @@ def _seed_dev_data(admin, ay):
 
     db.session.commit()
     click.echo("    [commit] Teachers, classes, students saved.")
+
+    # CM6: emit one ClassEnrollment per student for the active year so the
+    # placement history (and caches) are consistent from the start. The
+    # migration backfill also covers this; here it makes the dev dataset
+    # rollover-ready without a separate upgrade pass. Idempotent.
+    click.echo("  Creating dev class enrollments...")
+    created_ce = 0
+    for s in Student.query.filter(Student.is_deleted.is_(False)).all():
+        cls = db.session.get(Class, s.class_id)
+        if cls is None:
+            continue
+        if (
+            ClassEnrollment.query.filter_by(
+                student_id=s.id, academic_year_id=ay.id
+            ).first()
+            is not None
+        ):
+            continue
+        enroll_student(
+            student_id=s.id,
+            class_id=s.class_id,
+            academic_year_id=ay.id,
+            homeroom_teacher_id=cls.homeroom_teacher_id,
+            session=db.session,
+        )
+        created_ce += 1
+    db.session.commit()
+    click.echo(f"    {created_ce} class enrollments created.")
 
     # Check if any student already has violations — if so, skip (idempotent).
     existing = ViolationRecord.query.first()

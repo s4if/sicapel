@@ -116,6 +116,8 @@ def pdf(id):
 @login_required
 @role_required("admin", "guru_bk")
 def void(id):
+    from ..services import recompute_summary
+
     e = db.get_or_404(ExpulsionRecommendation, id)
     if e.status == "void":
         return hx_render(
@@ -123,6 +125,7 @@ def void(id):
             error="Rekomendasi ekspulsi sudah dibatalkan.",
         )
     e.status = "void"
+    recompute_summary(e.student_id, db.session)
     db.session.commit()
     return hx_render(
         "expulsion/index.html",
@@ -134,6 +137,8 @@ def void(id):
 @login_required
 @role_required("admin", "guru_bk")
 def recover(id):
+    from ..services import recompute_summary
+
     e = db.get_or_404(ExpulsionRecommendation, id)
     if e.status != "void":
         return hx_render(
@@ -141,6 +146,7 @@ def recover(id):
             error="Rekomendasi ekspulsi belum dibatalkan.",
         )
     e.status = "issued"
+    recompute_summary(e.student_id, db.session)
     db.session.commit()
     return hx_render(
         "expulsion/index.html",

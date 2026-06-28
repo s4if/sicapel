@@ -2,8 +2,15 @@ from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
 from ..forms import StudentForm
-from ..helper import hx_render, role_required, sanitize, scope_students_to_role
+from ..helper import (
+    current_academic_year,
+    hx_render,
+    role_required,
+    sanitize,
+    scope_students_to_role,
+)
 from ..models import Class, Student, StudentPointSummary
+from ..services import enroll_student
 
 bp = Blueprint("students", __name__, url_prefix="/siswa")
 
@@ -21,6 +28,29 @@ def _class_choices():
         .order_by(Class.grade_level, Class.name)
         .all()
     ]
+
+
+def _sync_enrollment(student, class_id, session):
+    """Create/update the student's active-year ClassEnrollment so cache +
+    history stay consistent (CM3 / §4.1).
+
+    ``homeroom_teacher_id`` is taken from the chosen class's cache (the wali
+    kelas AS OF the current year). No-op when there is no active academic
+    year (§2.1) — the cache column still holds the chosen class.
+    """
+    ay = current_academic_year()
+    if ay is None:
+        return
+    cls = session.get(Class, class_id)
+    if cls is None:
+        return
+    enroll_student(
+        student_id=student.id,
+        class_id=class_id,
+        academic_year_id=ay.id,
+        homeroom_teacher_id=cls.homeroom_teacher_id,
+        session=session,
+    )
 
 
 def _base_query():
@@ -155,6 +185,8 @@ def tambah():
         enrolled_at=form.enrolled_at.data,
     )
     db.session.add(student)
+    db.session.flush()  # need student.id for the enrollment row
+    _sync_enrollment(student, form.class_id.data, db.session)
     db.session.commit()
 
     return hx_render(
@@ -220,6 +252,7 @@ def edit(id):
     student.parent_phone = form.parent_phone.data or None
     student.status = form.status.data
     student.enrolled_at = form.enrolled_at.data
+    _sync_enrollment(student, form.class_id.data, db.session)
     db.session.commit()
 
     return hx_render(

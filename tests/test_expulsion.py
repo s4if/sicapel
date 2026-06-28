@@ -9,6 +9,7 @@ from datetime import date, time
 import pytest
 
 from app import db
+from app.models import Student
 from app.services import record_violation
 from tests.conftest import login
 
@@ -169,3 +170,40 @@ def test_pdf_blocked_for_wali_kelas(client, wali_kelas, violation_setup):
     e = _make_expulsion_via_sangat_berat(violation_setup)
     login(client, "walikelas@example.com")
     assert client.get(f"/ekspulsi/{e.id}/pdf").status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# void / recover — student.status reconciliation
+# ---------------------------------------------------------------------------
+def test_void_expulsion_restores_student_status(client, admin, violation_setup):
+    """Voiding an expulsion flips student.status expelled -> active."""
+    e = _make_expulsion_via_sangat_berat(violation_setup)
+    db.session.commit()
+
+    sid = violation_setup.student.id
+    assert db.session.get(Student, sid).status == "expelled"
+
+    login(client, "admin@example.com")
+    resp = client.post(f"/ekspulsi/{e.id}/void")
+    assert resp.status_code == 200
+
+    db.session.expire_all()
+    assert db.session.get(Student, sid).status == "active"
+
+
+def test_recover_expulsion_re_marks_student_expelled(client, admin, violation_setup):
+    """Recovering a voided expulsion flips student.status active -> expelled."""
+    e = _make_expulsion_via_sangat_berat(violation_setup)
+    db.session.commit()
+
+    sid = violation_setup.student.id
+    assert db.session.get(Student, sid).status == "expelled"
+
+    login(client, "admin@example.com")
+    client.post(f"/ekspulsi/{e.id}/void")
+    db.session.expire_all()
+    assert db.session.get(Student, sid).status == "active"
+
+    client.post(f"/ekspulsi/{e.id}/recover")
+    db.session.expire_all()
+    assert db.session.get(Student, sid).status == "expelled"

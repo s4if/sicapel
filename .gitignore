@@ -1,4 +1,6 @@
 instance/
+# migrations/ — ignored while the project is under heavy development;
+# un-ignore and commit before the first production deploy so schema history is reproducible.
 migrations/
 .zed/
 .venv/
