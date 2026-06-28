@@ -12,13 +12,19 @@
 >
 > **How to read this document:** top to bottom. Section order mirrors dependency
 > order — domain → data → stack → architecture → patterns → tasks.
+>
+> **Companion plan:** [`CLASSES_MODIFICATION.md`](./CLASSES_MODIFICATION.md) is
+> the authoritative, step-by-step implementation plan for the multi-year class /
+> enrollment / academic-year-rollover feature summarized in §1.9, §2.13, §8.6,
+> §8.7 and §14.1. The high-level contracts live here (the sole source of
+> truth); the migration, file-by-file changes and task breakdown live there.
 
 ---
 
 ## Table of Contents
 
 1. [Domain & Business Rules](#1-domain--business-rules)
-2. [Database Design (12 tables)](#2-database-design-12-tables)
+2. [Database Design (13 tables)](#2-database-design-13-tables)
 3. [Tech Stack (Final)](#3-tech-stack-final)
 4. [Architecture Decisions](#4-architecture-decisions)
 5. [Project Structure](#5-project-structure)
@@ -42,7 +48,7 @@
 
 - **Admin** — manages master data & users.
 - **Guru BK** (counseling teacher) — inputs violations, prints letters, inputs amnesties; full data access.
-- **Wali Kelas** (homeroom teacher) — inputs violations **only for students in their class**.
+- **Wali Kelas** (homeroom teacher) — inputs violations **only for students in their current class** (the class they are the assigned homeroom teacher of in the active academic year; see §2.13 `class_enrollments`). A wali kelas sees the full disciplinary history of their current class, including records from academic years before they took the class over.
 
 The principal (kepala sekolah) is **not** a system user; their name is recorded as a string on amnesty letters.
 
@@ -109,9 +115,41 @@ as the concurrency backstop (see §8.3).
 
 Students with `total_points > 200` are highlighted on the Guru BK dashboard. This is a **display-only** alert; no automatic action.
 
+### 1.9 Academic-Year Rollover & Class Placement
+
+The system runs **continuously across academic years**. A student's class and
+their class's homeroom teacher are **per-year facts**, not timeless ones:
+
+- Class placement and homeroom-teacher assignment are recorded per academic
+  year in `class_enrollments` (§2.13) — the source of truth for *who was in
+  which class* and *who was the wali kelas* in any given year.
+- Disciplinary data (`violation_records`, `warning_letters`,
+  `expulsion_recommendations`, `point_amnesties`) is already stamped with
+  `academic_year_id`; the class/teacher **as of a given violation** is resolved
+  by joining on `(student_id, academic_year_id)` → `class_enrollments`. **No
+  class/teacher snapshot is stored on `violation_records`.**
+- Points accumulate **continuously** across years (§1.3) — rollover never
+  resets points or SP level.
+- **Rollover action** (`promote_academic_year`, §8.7), run by admin at the
+  start of a new academic year:
+  - grade 12 → `student.status = graduated` (no new enrollment);
+  - grade 10 → 11, grade 11 → 12 → a new `class_enrollments` row in the target
+    year (old enrollment `is_active=false`, new `is_active=true`);
+  - the admin picks the **target class** (must pre-exist) and the **new
+    homeroom teacher** per source class in a preview step;
+  - the target academic year is activated, the source deactivated.
+- **Mid-year homeroom-teacher change:** overwrites the current-year
+  enrollment's `homeroom_teacher_id` (and the `classes.homeroom_teacher_id`
+  cache). Within-year tenure splits are **not** tracked in v1.
+- Repeating / transferring students are handled as manual edits after rollover.
+- The "current" class/teacher shown everywhere in the UI is read from the
+  **cache** columns `students.class_id` and `classes.homeroom_teacher_id`
+  (§2.3 / §2.4), kept in sync with the active enrollment by the enrollment and
+  rollover services. This keeps every existing R12 join valid.
+
 ---
 
-## 2. Database Design (12 tables)
+## 2. Database Design (13 tables)
 
 RDBMS: **PostgreSQL in production** (psycopg v3), **SQLite in dev/test** (via instance folder). Enum types render as native `ENUM` in PostgreSQL and `VARCHAR + CHECK` in SQLite — **validation always lives in WTForms/Python**, never rely on DB-level enum enforcement.
 
@@ -141,12 +179,16 @@ RDBMS: **PostgreSQL in production** (psycopg v3), **SQLite in dev/test** (via in
 
 ### 2.3 `classes`
 
+Class **identity/label** (stable across years). A class row is a slot such as
+"X IPA 1"; each academic year a different cohort of students is enrolled into
+it via `class_enrollments` (§2.13).
+
 | Column | Type | Notes |
 |---|---|---|
 | id | PK | |
 | name | string | e.g. "XI IPA 2" |
 | grade_level | int | 10 \| 11 \| 12 |
-| homeroom_teacher_id | FK → users | wali kelas |
+| homeroom_teacher_id | FK → users | **cache** — current wali kelas (active academic year). Source of truth is `class_enrollments.homeroom_teacher_id`; this column is kept in sync by the enrollment/rollover services so existing R12 joins stay valid. |
 | created_at | timestamp | |
 
 ### 2.4 `students`
@@ -162,7 +204,7 @@ RDBMS: **PostgreSQL in production** (psycopg v3), **SQLite in dev/test** (via in
 | birth_date | date | |
 | address | text | |
 | photo_path | string | |
-| class_id | FK → classes | current class only (v1 — historical enrollments deferred) |
+| class_id | FK → classes | **cache** — current class (active academic year). Full per-year placement history lives in `class_enrollments` (§2.13); this column is the maintained current value so existing R12 joins stay valid. |
 | parent_name | string | |
 | parent_phone | string | |
 | status | enum | `active` \| `expelled` \| `graduated` \| `transferred` |
@@ -313,7 +355,39 @@ Maintained in the same transaction as `record_violation` / `apply_amnesty`. A `r
 | status | enum | `issued` \| `void` |
 | created_at, updated_at | timestamp | |
 
-### 2.13 Indexes (mandatory)
+### 2.13 `class_enrollments`
+
+Source of truth for **per-year class placement and homeroom-teacher
+assignment**. One row per `(student, academic_year)`. This is the table the
+"historical enrollments deferred" note in earlier drafts referred to; it is
+now first-class. See §1.9 for the rollover workflow and §2.3 / §2.4 for the
+"current" cache columns it keeps in sync.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | PK | |
+| student_id | FK → students | indexed |
+| class_id | FK → classes | the class the student was placed in that year |
+| academic_year_id | FK → academic_years | indexed |
+| homeroom_teacher_id | FK → users | the wali kelas **as of that year** |
+| is_active | bool | `true` for the student's current-year placement; rollover flips the previous year's rows to `false` |
+| created_at | timestamp | |
+
+**Constraints:**
+- `UNIQUE(student_id, academic_year_id)` — a student has exactly one class
+  placement per academic year (enforced via `db.UniqueConstraint` in
+  `__table_args__`). This is also the backstop that makes mid-year edits and
+  rollover idempotent.
+- `INDEX(class_id, academic_year_id)` — "who was in class X in year Y".
+- `INDEX(homeroom_teacher_id)` — wali-kelas scoping history queries.
+
+**Cache invariant:** after any mutation (enroll / edit / rollover), the
+matching `students.class_id` and `classes.homeroom_teacher_id` cache columns
+for the active year MUST match this table. Maintained transactionally by the
+services in §8.6 / §8.7; a `recompute_current_placement(student_id)` backstop
+mirrors the `recompute_summary()` pattern (§2.11).
+
+### 2.14 Indexes (mandatory)
 
 ```
 violation_records:        (student_id), (academic_year_id), (created_at), (category_id)
@@ -322,9 +396,11 @@ expulsion_recommendations:(student_id), (academic_year_id, letter_seq) UNIQUE
 point_amnesties:          (student_id), (academic_year_id, letter_seq) UNIQUE
 student_point_summaries:  (total_points)   -- for ranking/dashboard
 students:                 (nis) UNIQUE, (class_id), (status)
+class_enrollments:        (student_id, academic_year_id) UNIQUE,
+                          (class_id, academic_year_id), (homeroom_teacher_id)
 ```
 
-Composite UNIQUE constraints on `(academic_year_id, letter_seq)` per letter table are enforced via `db.UniqueConstraint` in `__table_args__`.
+Composite UNIQUE constraints on `(academic_year_id, letter_seq)` per letter table, and on `(student_id, academic_year_id)` for `class_enrollments`, are enforced via `db.UniqueConstraint` in `__table_args__`.
 
 ---
 
@@ -384,9 +460,9 @@ sicapel/                         # project root
 ├── app/                         # application package (factory: app:create_app)
 │   ├── __init__.py              # create_app() factory + extension init
 │   ├── helper.py                # htmx instance, hx_render, sanitize, role decorators
-│   ├── models.py                # 12 SQLAlchemy models
+│   ├── models.py                # 13 SQLAlchemy models (incl. ClassEnrollment, §2.13)
 │   ├── forms.py                 # all WTForms
-│   ├── services.py              # domain logic + letter numbering + PDF + recompute_summary
+│   ├── services.py              # domain logic + letter numbering + PDF + recompute_summary + enrollment/rollover (§8.6/§8.7)
 │   ├── seed.py                  # Flask CLI command `uv run flask seed`
 │   ├── blueprints/
 │   │   ├── __init__.py
@@ -400,7 +476,7 @@ sicapel/                         # project root
 │   │   ├── expulsion.py         # list + detail + PDF
 │   │   ├── users.py             # admin CRUD
 │   │   ├── violation_types.py   # admin CRUD
-│   │   └── academic_years.py    # admin CRUD
+│   │   └── academic_years.py    # admin CRUD + rollover (promote_academic_year, §1.9/§8.7)
 │   ├── templates/
 │   │   ├── base.html            # <html><head><body hx-boost> + #hx_content
 │   │   ├── macros.html          # render_notif, render_field
@@ -415,7 +491,7 @@ sicapel/                         # project root
 │   │   ├── expulsion/{index,detail}.html
 │   │   ├── users/{index,form}.html
 │   │   ├── violation_types/{index,form}.html
-│   │   ├── academic_years/{index,form}.html
+│   │   ├── academic_years/{index,form,rollover}.html
 │   │   └── pdf/                 # standalone WeasyPrint, NOT dual-mode
 │   │       ├── warning_letter_sp.html
 │   │       ├── expulsion_recommendation.html
@@ -436,6 +512,8 @@ sicapel/                         # project root
 │   ├── test_services.py             # CRITICAL: 7 branches of §1.4
 │   ├── test_apply_amnesty.py
 │   ├── test_letter_numbering.py     # concurrency
+│   ├── test_enrollments.py          # ClassEnrollment uniqueness + cache sync (§2.13)
+│   ├── test_rollover.py             # promote_academic_year (§1.9/§8.7)
 │   ├── test_routes.py               # smoke + RBAC
 │   └── test_pdfs.py                 # render smoke
 ├── pyproject.toml               # project metadata + deps (uv-managed)
@@ -723,6 +801,62 @@ def render_expulsion_pdf(expulsion) -> bytes: ...
 def render_amnesty_pdf(amnesty) -> bytes: ...
 ```
 
+### 8.6 `enroll_student`
+
+```python
+def enroll_student(*, student_id, class_id, academic_year_id,
+                   homeroom_teacher_id, session) -> "ClassEnrollment":
+    """Create or update the student's class placement for a given academic
+    year (§2.13). Atomic; caller commits.
+
+    - Enforces the one-placement-per-year rule via the
+      UNIQUE(student_id, academic_year_id) constraint.
+    - If a row already exists for (student_id, academic_year_id), it is
+      updated in place (class_id / homeroom_teacher_id overwritten) — this is
+      the mid-year edit path (§1.9: overwrite, no tenure split).
+    - Keeps caches in sync: when `academic_year_id` is the active year, writes
+      students.class_id and classes.homeroom_teacher_id to match.
+    - Sets is_active=True on this row, is_active=False on the same student's
+      rows in other years (only one active placement per student)."""
+```
+
+### 8.7 `promote_academic_year`
+
+```python
+def promote_academic_year(*, source_year_id, target_year_id, class_map,
+                          graduate_grade=12, session) -> dict:
+    """Rollover (§1.9). Atomic; caller commits. `class_map` maps each source
+    class to its target:
+        {source_class_id: (target_class_id, new_homeroom_teacher_id)}
+
+    Returns: {'graduated': [student_ids],
+              'promoted':  [student_ids],
+              'skipped':   [student_ids]}   # e.g. inactive/already-graduated
+
+    Per source-class cohort, for each student whose current enrollment is in
+    `source_year_id` and whose status is 'active':
+      - class.grade_level == graduate_grade -> status='graduated', no new
+        enrollment;
+      - else -> create a ClassEnrollment in target_year_id
+        (class_id=target_class_id, homeroom_teacher_id=new_teacher,
+        is_active=True); set the prior enrollment is_active=False; update
+        students.class_id cache (and the target classes.homeroom_teacher_id
+        cache) to match.
+    Finally activate target_year_id (is_active=True) and deactivate
+    source_year_id.
+
+    Guards (raise / refuse):
+      - target_year_id must differ from source_year_id and must already exist;
+      - target_year_id must not already have enrollments (idempotency: a
+        half-run rollover is not silently extended);
+      - every source_class_id in class_map must map to a target_class_id that
+        pre-exists (target classes are NOT auto-created, §1.9)."""
+```
+
+A `recompute_current_placement(student_id, session)` backstop recomputes the
+`students.class_id` / `classes.homeroom_teacher_id` caches for the active year
+from `class_enrollments` — same pattern as `recompute_summary()` (§2.11 / §8.4).
+
 ---
 
 ## 9. Blueprint Pattern
@@ -815,6 +949,15 @@ def tambah():
 Other endpoints in this blueprint: `detail/<int:id>`, `void/<int:id>` (POST, sets `is_void=True` + calls `recompute_summary`), `preview-points` (JSON for HTMX preview), plus private helpers `_student_choices()` (scope by role), `_violation_type_choices()`, `_row_actions(v)`.
 
 The other 10 blueprints (`auth`, `dashboard`, `students`, `classes`, `warnings`, `amnesties`, `expulsion`, `users`, `violation_types`, `academic_years`) follow the same shape.
+
+> **Academic-year rollover** lives in the `academic_years` blueprint (admin
+> only) as a preview → commit pair (`/tahun-ajaran/rollover` GET renders the
+> mapping form; `/tahun-ajaran/rollover` POST calls `promote_academic_year`,
+> §8.7). It does **not** get its own blueprint. Student create/edit in
+> `students` calls `enroll_student` (§8.6) transactionally so the active-year
+> enrollment and the `students.class_id` cache stay in sync. See
+> [`CLASSES_MODIFICATION.md`](./CLASSES_MODIFICATION.md) for the route-by-route
+> change list.
 
 ### 9.2 Blueprint registration (inside `create_app`)
 
@@ -1071,6 +1214,26 @@ Per role, assert 200/302/403 at every endpoint; wali_kelas cannot see students o
 
 Render each PDF template with a sample object; assert non-empty bytes + magic header `%PDF`. Gate with `pytest.importorskip("weasyprint")` so tests skip cleanly if system deps are missing.
 
+### 13.7 `test_enrollments.py`
+
+`ClassEnrollment` (§2.13) + cache invariant:
+
+1. `enroll_student` creates one active enrollment and the `students.class_id` cache matches.
+2. Re-enrolling the same `(student_id, academic_year_id)` updates in place (mid-year edit) — no duplicate row.
+3. Backstop: directly inserting a second row for the same `(student_id, academic_year_id)` raises `IntegrityError` (verifies the UNIQUE constraint, same style as §13.4 case 5).
+4. Editing a student's class via `students` blueprint keeps the cache and the enrollment in sync.
+
+### 13.8 `test_rollover.py`
+
+`promote_academic_year` (§8.7):
+
+1. grade 12 → `status='graduated'`, no new enrollment.
+2. grade 10 → 11, grade 11 → 12 → new target-year enrollment (`is_active=True`), prior enrollment `is_active=False`.
+3. `students.class_id` / `classes.homeroom_teacher_id` caches reflect the target year after rollover.
+4. Target year activated, source deactivated.
+5. Idempotency guard: refuses if target year already has enrollments.
+6. Target classes must pre-exist (no silent auto-create).
+
 ---
 
 ## 14. Implementation Order (T1–T20)
@@ -1078,7 +1241,7 @@ Render each PDF template with a sample object; assert non-empty bytes + magic he
 | # | Task | Blocked by |
 |---|---|---|
 | **T1** | **Scaffold.** `uv init` + create `app/` package + `uv add flask flask-sqlalchemy flask-wtf flask-login flask-htmx python-dotenv weasyprint psycopg[binary] pillow python-magic` + `uv add --group dev pytest factory-boy ruff`. Then `app/__init__.py` factory (`create_app` + instance folder per §7.1), `app/helper.py` (htmx + hx_render + sanitize + role decorators stub), `pyproject.toml` + `uv.lock`, `.flaskenv` (`FLASK_APP=app`), `.env.example`, `.gitignore` (must include `instance/`), `/healthcheck` route. **Verify:** `uv run flask run --debug` starts and `/healthcheck` returns 200. | — |
-| **T2** | `models.py` (12 models per §2) + `uv run flask db init/migrate/upgrade`; smoke-test schema on both SQLite and an empty PostgreSQL. | T1 |
+| **T2** | `models.py` (13 models per §2, incl. `ClassEnrollment`) + `uv run flask db init/migrate/upgrade`; smoke-test schema on both SQLite and an empty PostgreSQL. | T1 |
 | **T3** | `app/seed.py` exposed as Flask CLI command (`seed_cli`, registered in `create_app`): 4 `violation_categories`, 1 admin user, sample `violation_types`, 1 active `academic_year`. Run via `uv run flask seed`. | T2 |
 | **T4** | `auth.py` blueprint + Flask-Login wiring + `@role_required` + `@class_owned_required`. | T1, T2 |
 | **T5** | `base.html` + `macros.html` + nav partial + dual-mode header convention. | T4 |
@@ -1098,6 +1261,24 @@ Render each PDF template with a sample object; assert non-empty bytes + magic he
 | **T19** | Final audit: `uv run ruff check .`, CSRF on every form, audit `sanitize()` on every DataTables cell. | all |
 | **T20** | Deploy: install uv on the server, `uv sync --frozen --no-dev` (from committed `uv.lock`), run `uv run gunicorn "app:create_app()" ...` + nginx, env vars `DATABASE_URL`/`SECRET_KEY`/`UPLOAD_FOLDER` (point `UPLOAD_FOLDER` at a mounted volume), `uv run flask db upgrade` on first deploy. | T19 |
 
+### 14.1 Post-v1 modification — multi-year classes / enrollment / rollover
+
+The base build (T1–T20) ships with `class_enrollments` as part of the schema
+(§2.13) but **without** the history-aware services and rollover UI wired in
+everywhere. Activating full multi-year operation is a dedicated modification
+phase, tasks **CM1–CM7**, defined in full in
+[`CLASSES_MODIFICATION.md`](./CLASSES_MODIFICATION.md). Summary:
+
+| # | Task | Blocked by |
+|---|---|---|
+| **CM1** | Add `ClassEnrollment` model + relationships + migration (create table, backfill one enrollment per existing student from current `students.class_id` + active year + `classes.homeroom_teacher_id`). | T2 |
+| **CM2** | `services.enroll_student` + `services.recompute_current_placement` + `test_enrollments.py` (§8.6, §13.7). | CM1 |
+| **CM3** | Wire `students` create/edit + `classes` homeroom-teacher edit to keep enrollments and caches in sync. | CM2 |
+| **CM4** | `services.promote_academic_year` + `test_rollover.py` (§8.7, §13.8). | CM2 |
+| **CM5** | Rollover UI in `academic_years` blueprint (`/tahun-ajaran/rollover` preview → commit) + `academic_years/rollover.html` + rollover form. | CM4 |
+| **CM6** | Update `seed.py` to emit `class_enrollments`; add historical-placement reporting where applicable. | CM3 |
+| **CM7** | Audit + migration smoke test on PostgreSQL; verify no R12 join regressed (scoping unchanged because it reads caches). | CM1–CM6 |
+
 ---
 
 ## 15. Risks & Mitigations
@@ -1112,6 +1293,7 @@ Render each PDF template with a sample object; assert non-empty bytes + magic he
 | Upload abuse (MIME spoofing, large files) | `MAX_CONTENT_LENGTH` + MIME whitelist via `python-magic` + Pillow decode-test for photos + UUID path strategy. |
 | Enum migration behavior differs SQLite vs PostgreSQL | Run `uv run flask db upgrade` against an empty PostgreSQL periodically from T2 onward as a smoke test. |
 | uv not installed on server/CI runner | Install uv via the official installer (`curl -LsSf https://astral.sh/uv/install.sh \| sh`) in the Dockerfile/CI; deploy **must** use `uv sync --frozen` from the committed `uv.lock` so dev↔prod versions are identical. |
+| `students.class_id` / `classes.homeroom_teacher_id` caches drift from `class_enrollments` | Both cache columns are maintained transactionally by `enroll_student` / `promote_academic_year` (§8.6/§8.7); `recompute_current_placement(student_id)` is the source-of-truth backstop (mirrors `recompute_summary`, §2.11). Rollover is idempotency-guarded (refuses if target year already has enrollments). |
 
 ---
 

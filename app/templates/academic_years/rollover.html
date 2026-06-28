@@ -1,0 +1,162 @@
+{% if not is_htmx %}
+{% extends "base.html" %}
+{% block title %}Rollover Tahun Ajaran &mdash; SICAPEL{% endblock %}
+{% else %}
+<title>Rollover Tahun Ajaran &mdash; SICAPEL</title>
+{% endif %}
+
+{% from "macros.html" import render_notif %}
+
+{% block content %}
+{{ render_notif(error, success, info) }}
+
+<h4 class="mb-3">Rollover Tahun Ajaran</h4>
+
+{% if source %}
+  <p class="text-muted mb-3">
+    Tahun ajaran aktif (asal):
+    <strong>{{ source.year }}</strong>
+    {% if target %}&rarr; tahun ajaran baru (tujuan): <strong>{{ target.year }}</strong>{% endif %}
+  </p>
+{% endif %}
+
+{% if not candidates and not result %}
+  <div class="alert alert-warning">
+    Tidak ada tahun ajaran tujuan yang tersedia. Buat tahun ajaran baru
+    (tidak aktif, tanpa data kelas) terlebih dahulu.
+    <a class="alert-link" href="{{ url_for('academic_years.tambah') }}"
+       hx-get="{{ url_for('academic_years.tambah') }}"
+       hx-target="#hx_content" hx-swap="innerHTML">
+      Tambah Tahun Ajaran
+    </a>
+  </div>
+{% endif %}
+
+{% if candidates or result %}
+<form id="rolloverForm"
+      method="POST"
+      action="{{ url_for('academic_years.rollover') }}"
+      hx-post="{{ url_for('academic_years.rollover') }}"
+      hx-target="#hx_content" hx-swap="innerHTML">
+  {{ form.hidden_tag() }}
+
+  {% if candidates %}
+  <div class="mb-3">
+    <label class="form-label" for="target_year_id">Tahun Ajaran Tujuan</label>
+    <select id="target_year_id" name="target_year_id" class="form-select"
+            style="max-width: 20rem;"
+            {% if result %}disabled{% endif %}>
+      {% for ay in candidates %}
+        <option value="{{ ay.id }}"
+          {% if form.target_year_id.data == ay.id %}selected{% endif %}>{{ ay.year }}</option>
+      {% endfor %}
+    </select>
+    {% if form.target_year_id.errors %}
+      <div class="invalid-feedback d-block">
+        {% for e in form.target_year_id.errors %}{{ e }}{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Kelas Asal (wali kelas)</th>
+          <th>Tingkat</th>
+          <th>&rarr; Kelas Tujuan</th>
+          <th>Wali Kelas Baru</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        {% set c = row.source_class %}
+        <tr>
+          <td>
+            {{ c.name }}
+            <span class="text-muted">
+              ({{ c.homeroom_teacher.name if c.homeroom_teacher else "-" }})
+            </span>
+          </td>
+          <td>{{ c.grade_level }}</td>
+          {% if row.is_graduating %}
+          <td colspan="2" class="text-muted">Lulus &mdash; tidak ada kelas tujuan</td>
+          {% else %}
+          <td>
+            <select name="target-{{ c.id }}" class="form-select form-select-sm"
+                    {% if result %}disabled{% endif %}>
+              <option value="">&mdash; pilih kelas &mdash;</option>
+              {% for tc in all_classes if tc.grade_level == c.grade_level + 1 %}
+                <option value="{{ tc.id }}"
+                  {% if row.default_target_id == tc.id %}selected{% endif %}>{{ tc.name }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select name="teacher-{{ c.id }}" class="form-select form-select-sm"
+                    {% if result %}disabled{% endif %}>
+              <option value="">&mdash; pilih wali kelas &mdash;</option>
+              {% for tid, tname in teachers %}
+                <option value="{{ tid }}">{{ tname }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+        {% if not rows %}
+        <tr><td colspan="4" class="text-muted text-center">Tidak ada kelas pada tahun ajaran aktif.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if not result %}
+  <button type="button" class="btn btn-warning"
+          onclick="new bootstrap.Modal(document.getElementById('modalConfirm')).show()">
+    <i class="bi bi-arrow-repeat"></i> Proses Rollover
+  </button>
+  <button type="submit" id="rolloverSubmit" hidden></button>
+  {% endif %}
+</form>
+{% endif %}
+
+{% if result %}
+<div class="alert alert-success">
+  <strong>Hasil rollover:</strong><br>
+  Lulus: {{ result.graduated | length }} &middot;
+  Naik kelas: {{ result.promoted | length }} &middot;
+  Dilewati: {{ result.skipped | length }}
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a class="btn btn-secondary" href="{{ url_for('academic_years.index') }}"
+     hx-get="{{ url_for('academic_years.index') }}"
+     hx-target="#hx_content" hx-swap="innerHTML">Kembali</a>
+</div>
+
+{% if not result %}
+<div class="modal fade" id="modalConfirm" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Konfirmasi Rollover</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      Proses rollover tidak dapat dibatalkan. Tahun ajaran tujuan akan menjadi
+      aktif, siswa naik kelas, dan siswa kelas
+      {{ graduate_grade }} dinyatakan lulus. Lanjutkan?
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      <button type="button" class="btn btn-primary"
+              onclick="document.getElementById('rolloverSubmit').click()">
+        Ya, Proses
+      </button>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+{% endblock %}

@@ -182,6 +182,19 @@ class AcademicYearForm(FlaskForm):
         return True
 
 
+class RolloverForm(FlaskForm):
+    """Start a new academic year (CLASSES_MODIFICATION §7 / D-C2).
+
+    ``target_year_id`` selects the pre-existing candidate year. The
+    per-source-class mapping rows (target class + new wali kelas) are rendered
+    and parsed manually in the rollover template/route — only the target year
+    and the CSRF token live on this form.
+    """
+
+    target_year_id = SelectField("Tahun Ajaran Tujuan", coerce=int, validators=[DataRequired()])
+    submit = SubmitField("Proses Rollover")
+
+
 class ViolationRecordForm(FlaskForm):
     student_id = SelectField("Siswa", coerce=int, validators=[DataRequired()])
     violation_type_id = SelectField("Jenis Pelanggaran", coerce=int, validators=[DataRequired()])

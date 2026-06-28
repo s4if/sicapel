@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
 from ..forms import ClassForm
-from ..helper import hx_render, role_required, sanitize
-from ..models import Class, Student, User
+from ..helper import current_academic_year, hx_render, role_required, sanitize
+from ..models import Class, ClassEnrollment, Student, User
 
 bp = Blueprint("classes", __name__, url_prefix="/kelas")
 
@@ -27,6 +27,25 @@ def _teacher_choices():
 
 def _related_counts(class_id):
     return {"siswa": Student.query.filter_by(class_id=class_id).count()}
+
+
+def _sync_class_enrollments(cls, homeroom_teacher_id, session):
+    """Mid-year wali-kelas rotation (D-C4 / §6): overwrite the
+    ``homeroom_teacher_id`` of every current-year enrollment in this class so
+    the placement history agrees with the ``classes.homeroom_teacher_id``
+    cache. No-op when there is no active academic year. Within-year tenure
+    splits are intentionally NOT tracked (v1).
+    """
+    ay = current_academic_year()
+    if ay is None:
+        return
+    session.query(ClassEnrollment).filter(
+        ClassEnrollment.class_id == cls.id,
+        ClassEnrollment.academic_year_id == ay.id,
+    ).update(
+        {ClassEnrollment.homeroom_teacher_id: homeroom_teacher_id},
+        synchronize_session=False,
+    )
 
 
 def _row_actions(cls):
@@ -136,6 +155,7 @@ def edit(id):
     cls.name = form.name.data
     cls.grade_level = form.grade_level.data
     cls.homeroom_teacher_id = form.homeroom_teacher_id.data
+    _sync_class_enrollments(cls, form.homeroom_teacher_id.data, db.session)
     db.session.commit()
 
     return hx_render(

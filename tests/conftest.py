@@ -7,6 +7,7 @@ from app.helper import hash_password
 from app.models import (
     AcademicYear,
     Class,
+    ClassEnrollment,
     Document,
     Student,
     User,
@@ -62,6 +63,20 @@ def make_academic_year(year="2026/2027", active=True):
     db.session.add(ay)
     db.session.commit()
     return ay
+
+
+def make_enrollment(student_id, class_id, academic_year_id, homeroom_teacher_id, is_active=True):
+    """Create a ClassEnrollment row directly (CM tests)."""
+    ce = ClassEnrollment(
+        student_id=student_id,
+        class_id=class_id,
+        academic_year_id=academic_year_id,
+        homeroom_teacher_id=homeroom_teacher_id,
+        is_active=is_active,
+    )
+    db.session.add(ce)
+    db.session.commit()
+    return ce
 
 
 _CATEGORY_SPECS = {

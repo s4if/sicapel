@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 
 from .models import (
     AcademicYear,
+    Class,
+    ClassEnrollment,
     ExpulsionRecommendation,
     PointAmnesty,
     Student,
@@ -478,3 +480,225 @@ def render_expulsion_pdf(expulsion) -> bytes:
 def render_amnesty_pdf(amnesty) -> bytes:
     """Render a :class:`PointAmnesty` letter to PDF bytes (§8.5)."""
     return _weasyprint_pdf("pdf/amnesty_letter.html", amnesty=amnesty)
+
+
+# ---------------------------------------------------------------------------
+# Placement / multi-year enrollment (CLASSES_MODIFICATION §4)
+# ---------------------------------------------------------------------------
+def _active_academic_year_id(session):
+    """Return the ``academic_years.id`` with ``is_active=True``, or None (§2.1)."""
+    return session.scalar(
+        select(AcademicYear.id).where(AcademicYear.is_active.is_(True)).limit(1)
+    )
+
+
+def enroll_student(
+    *,
+    student_id,
+    class_id,
+    academic_year_id,
+    homeroom_teacher_id,
+    session,
+) -> ClassEnrollment:
+    """Upsert a student's placement for an academic year (§4.1). Atomic;
+    caller commits.
+
+    - Upsert on ``(student_id, academic_year_id)``: if a row exists its
+      ``class_id`` / ``homeroom_teacher_id`` are overwritten in place (the
+      mid-year edit path, D-C4); else a new row is inserted. The UNIQUE
+      ``(student_id, academic_year_id)`` constraint stays clean either way.
+    - This row becomes ``is_active=True``; the student's other-year rows
+      are flipped ``is_active=False`` (invariant 1 — exactly one active
+      enrollment per student).
+    - If ``academic_year_id`` is the active year, the cache columns
+      ``students.class_id`` and ``classes.homeroom_teacher_id`` are
+      refreshed to match (D-C6 / invariant 2).
+    """
+    enrollment = session.scalar(
+        select(ClassEnrollment).where(
+            ClassEnrollment.student_id == student_id,
+            ClassEnrollment.academic_year_id == academic_year_id,
+        )
+    )
+    if enrollment is None:
+        enrollment = ClassEnrollment(
+            student_id=student_id,
+            class_id=class_id,
+            academic_year_id=academic_year_id,
+            homeroom_teacher_id=homeroom_teacher_id,
+            is_active=True,
+        )
+        session.add(enrollment)
+    else:
+        enrollment.class_id = class_id
+        enrollment.homeroom_teacher_id = homeroom_teacher_id
+        enrollment.is_active = True
+
+    # Invariant 1: exactly one active enrollment per student — deactivate
+    # every other-year row for the same student.
+    session.query(ClassEnrollment).filter(
+        ClassEnrollment.student_id == student_id,
+        ClassEnrollment.academic_year_id != academic_year_id,
+        ClassEnrollment.is_active.is_(True),
+    ).update({ClassEnrollment.is_active: False}, synchronize_session=False)
+
+    # Invariant 2: keep the caches in sync with the active-year placement.
+    if academic_year_id == _active_academic_year_id(session):
+        student = session.get(Student, student_id)
+        if student is not None:
+            student.class_id = class_id
+        cls = session.get(Class, class_id)
+        if cls is not None:
+            cls.homeroom_teacher_id = homeroom_teacher_id
+
+    session.flush()
+    return enrollment
+
+
+def recompute_current_placement(student_id, session):
+    """Backstop: re-derive ``students.class_id`` and the matched class's
+    ``classes.homeroom_teacher_id`` from the active-year ``class_enrollments``
+    row (§4.3). Mirrors :func:`recompute_summary` for placement. Used after
+    manual data fixes / voids.
+
+    No-op if there is no active-year enrollment for the student.
+    """
+    active_year_id = _active_academic_year_id(session)
+    if active_year_id is None:
+        return None
+
+    enrollment = session.scalar(
+        select(ClassEnrollment).where(
+            ClassEnrollment.student_id == student_id,
+            ClassEnrollment.academic_year_id == active_year_id,
+        )
+    )
+    if enrollment is None:
+        return None
+
+    student = session.get(Student, student_id)
+    if student is not None:
+        student.class_id = enrollment.class_id
+    cls = session.get(Class, enrollment.class_id)
+    if cls is not None:
+        cls.homeroom_teacher_id = enrollment.homeroom_teacher_id
+
+    session.flush()
+    return enrollment
+
+
+def promote_academic_year(
+    *,
+    source_year_id,
+    target_year_id,
+    class_map,
+    graduate_grade=12,
+    session,
+) -> dict:
+    """Rollover: promote each cohort into the next academic year (§4.2 / D-C2).
+    Atomic; caller commits.
+
+    ``class_map`` maps ``{source_class_id: (target_class_id, new_homeroom_teacher_id)}``.
+    Returns ``{'graduated': [...], 'promoted': [...], 'skipped': [...]}`` (lists
+    of :class:`Student`).
+
+    For every student with an ``is_active`` enrollment in ``source_year_id``
+    and ``status == 'active'``:
+
+    - source class ``grade_level == graduate_grade`` → ``status='graduated'``
+      (no new enrollment; last placement is preserved as history, invariant 3).
+    - source class in ``class_map`` → a new target-year enrollment is created
+      via :func:`enroll_student` (which flips the prior row ``is_active=False``
+      and updates the caches, invariants 1 & 2).
+    - otherwise → skipped (no mapping; e.g. a non-active-status student or an
+      unmapped class).
+
+    Finally the target year becomes ``is_active=True`` and the source
+    ``is_active=False``.
+
+    Guards (raise ``ValueError``):
+    - ``target_year_id != source_year_id``.
+    - target academic year exists.
+    - target year has NO existing enrollments (idempotency).
+    - every ``source_class_id`` in ``class_map`` maps to a pre-existing
+      ``target_class_id`` (D-C5 — no auto-create).
+    """
+    if target_year_id == source_year_id:
+        raise ValueError("Tahun ajaran tujuan harus berbeda dari tahun asal.")
+
+    source_year = session.get(AcademicYear, source_year_id)
+    if source_year is None:
+        raise ValueError("Tahun ajaran asal tidak ditemukan.")
+
+    target_year = session.get(AcademicYear, target_year_id)
+    if target_year is None:
+        raise ValueError("Tahun ajaran tujuan tidak ditemukan.")
+
+    # Idempotency: the target year must not already have enrollments.
+    existing = (
+        session.scalar(
+            select(func.count(ClassEnrollment.id)).where(
+                ClassEnrollment.academic_year_id == target_year_id
+            )
+        )
+        or 0
+    )
+    if existing:
+        raise ValueError(
+            "Tahun ajaran tujuan sudah memiliki data kelas — rollover sudah dilakukan."
+        )
+
+    # D-C5: every mapped target class must pre-exist (no auto-create).
+    for src_cid, (tgt_cid, _teacher) in class_map.items():
+        if session.get(Class, src_cid) is None:
+            raise ValueError(f"Kelas asal {src_cid} tidak ditemukan.")
+        if session.get(Class, tgt_cid) is None:
+            raise ValueError(f"Kelas tujuan {tgt_cid} tidak ditemukan.")
+
+    # Flip the active year FIRST so enroll_student updates the cache columns
+    # for the now-active target year (D-C6 / invariant 2). The source year's
+    # enrollments are preserved as history; only its is_active flag flips.
+    target_year.is_active = True
+    source_year.is_active = False
+
+    graduated: list = []
+    promoted: list = []
+    skipped: list = []
+
+    source_enrollments = session.scalars(
+        select(ClassEnrollment)
+        .where(
+            ClassEnrollment.academic_year_id == source_year_id,
+            ClassEnrollment.is_active.is_(True),
+        )
+        .order_by(ClassEnrollment.student_id)
+    ).all()
+
+    for ce in source_enrollments:
+        student = session.get(Student, ce.student_id)
+        if student is None:
+            continue
+        if student.status != "active":
+            skipped.append(student)
+            continue
+
+        src_class = session.get(Class, ce.class_id)
+        if src_class is not None and src_class.grade_level == graduate_grade:
+            # Graduate: no new enrollment; last placement kept as history.
+            student.status = "graduated"
+            graduated.append(student)
+        elif ce.class_id in class_map:
+            tgt_cid, new_teacher = class_map[ce.class_id]
+            enroll_student(
+                student_id=student.id,
+                class_id=tgt_cid,
+                academic_year_id=target_year_id,
+                homeroom_teacher_id=new_teacher,
+                session=session,
+            )
+            promoted.append(student)
+        else:
+            skipped.append(student)
+
+    session.flush()
+    return {"graduated": graduated, "promoted": promoted, "skipped": skipped}

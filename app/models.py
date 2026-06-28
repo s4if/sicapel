@@ -44,6 +44,8 @@ class AcademicYear(db.Model):
     is_deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
+    enrollments = db.relationship("ClassEnrollment", back_populates="academic_year")
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
@@ -68,6 +70,9 @@ class Class(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(60), nullable=False)
     grade_level = db.Column(db.Integer, nullable=False)
+    # CACHE (§3.2 / D-C6): equals the current-year class_enrollments
+    # .homeroom_teacher_id for this class. Maintained by enroll_student /
+    # promote_academic_year. Kept so every existing R12 join stays valid.
     homeroom_teacher_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
     )
@@ -75,6 +80,7 @@ class Class(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
 
     homeroom_teacher = db.relationship("User")
+    enrollments = db.relationship("ClassEnrollment", back_populates="class_")
 
 
 class Student(db.Model):
@@ -89,6 +95,8 @@ class Student(db.Model):
     birth_date = db.Column(db.Date)
     address = db.Column(db.Text)
     photo_path = db.Column(db.String(255))
+    # CACHE (§3.2 / D-C6): equals class_enrollments.class_id for the active
+    # academic year. Maintained by enroll_student / promote_academic_year.
     class_id = db.Column(
         db.Integer, db.ForeignKey("classes.id"), nullable=False, index=True
     )
@@ -105,6 +113,21 @@ class Student(db.Model):
     )
 
     class_ = db.relationship("Class")
+    enrollments = db.relationship(
+        "ClassEnrollment", back_populates="student", order_by="ClassEnrollment.id"
+    )
+
+    @property
+    def current_enrollment(self):
+        """The student's ``is_active=True`` placement row (§3.1).
+
+        Exactly one such row is expected per student — the one whose
+        ``academic_year_id`` is the active year (D-C6 / invariant 1).
+        """
+        for ce in self.enrollments:
+            if ce.is_active:
+                return ce
+        return None
 
 
 class ViolationCategory(db.Model):
@@ -358,3 +381,47 @@ class PointAmnesty(db.Model):
     recorded_by_user = db.relationship("User")
     academic_year = db.relationship("AcademicYear")
     signed_document = db.relationship("Document")
+
+
+class ClassEnrollment(db.Model):
+    """Placement history: who was in which class / under which wali kelas in
+    a given academic year (§3.1, D-C1).
+
+    This is the source of truth for historical placement. Exactly one row
+    per ``(student_id, academic_year_id)`` (UNIQUE). ``is_active=True``
+    marks the student's *current* placement — exactly one per student (the
+    row whose ``academic_year_id`` is the active year, invariant 1).
+
+    The cache columns ``students.class_id`` and ``classes.homeroom_teacher_id``
+    always mirror the active-year enrollment row (D-C6 / invariant 2); they
+    are maintained by ``enroll_student`` / ``promote_academic_year``.
+    """
+
+    __tablename__ = "class_enrollments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(
+        db.Integer, db.ForeignKey("students.id"), nullable=False, index=True
+    )
+    class_id = db.Column(db.Integer, db.ForeignKey("classes.id"), nullable=False)
+    academic_year_id = db.Column(
+        db.Integer, db.ForeignKey("academic_years.id"), nullable=False, index=True
+    )
+    homeroom_teacher_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_now)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "student_id", "academic_year_id", name="uq_enrollment_student_year"
+        ),
+        db.Index("ix_enrollment_class_year", "class_id", "academic_year_id"),
+        db.Index("ix_enrollment_teacher", "homeroom_teacher_id"),
+    )
+
+    student = db.relationship("Student", back_populates="enrollments")
+    class_ = db.relationship("Class", back_populates="enrollments")
+    academic_year = db.relationship("AcademicYear", back_populates="enrollments")
+    homeroom_teacher = db.relationship("User")

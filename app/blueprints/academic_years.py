@@ -1,13 +1,18 @@
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
-from ..forms import AcademicYearForm
-from ..helper import hx_render, role_required, sanitize
-from ..models import AcademicYear
+from ..forms import AcademicYearForm, RolloverForm
+from ..helper import current_academic_year, hx_render, role_required, sanitize
+from ..models import AcademicYear, Class, ClassEnrollment, User
+from ..services import promote_academic_year
 
 bp = Blueprint("academic_years", __name__, url_prefix="/tahun-ajaran")
 
 _LABEL = "Tahun ajaran"
+
+# The school runs a fixed 10/11/12 grade ladder (ClassForm choices); grade 12
+# graduates on rollover (CLASSES_MODIFICATION §4.2).
+_GRADUATE_GRADE = 12
 
 
 def _display(ay):
@@ -228,4 +233,202 @@ def restore(id):
         "academic_years/index.html",
         push_url="academic_years.index",
         success=f"{_LABEL} {_display(ay)} berhasil dipulihkan.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rollover — start a new academic year (CLASSES_MODIFICATION §7 / D-C2)
+# ---------------------------------------------------------------------------
+def _teacher_choices():
+    return [
+        (u.id, u.name)
+        for u in User.query.filter(
+            User.role == "wali_kelas", User.is_deleted.is_(False)
+        )
+        .order_by(User.name)
+        .all()
+    ]
+
+
+def _default_target_class(source_cls, all_classes):
+    """Default target = the next-grade class sharing the same name suffix
+    (e.g. ``X IPA 1`` → ``XI IPA 1``). None if no match (admin picks)."""
+    target_grade = source_cls.grade_level + 1
+    parts = source_cls.name.split(" ", 1)
+    suffix = parts[1] if len(parts) > 1 else ""
+    for c in all_classes:
+        if c.grade_level != target_grade:
+            continue
+        tparts = c.name.split(" ", 1)
+        if len(tparts) > 1 and tparts[1] == suffix:
+            return c
+    return None
+
+
+def _source_classes(source_year_id):
+    """Classes that have an active enrollment in the source year, ordered."""
+    from .. import db
+    from sqlalchemy import distinct
+
+    source_class_ids = [
+        row[0]
+        for row in db.session.query(distinct(ClassEnrollment.class_id))
+        .filter(
+            ClassEnrollment.academic_year_id == source_year_id,
+            ClassEnrollment.is_active.is_(True),
+        )
+        .all()
+    ]
+    return (
+        Class.query.filter(
+            Class.id.in_(source_class_ids), Class.is_deleted.is_(False)
+        )
+        .order_by(Class.grade_level, Class.name)
+        .all()
+    )
+
+
+def _build_rows(source_year_id):
+    """One mapping row per source class, with a defaulted target (§7)."""
+    all_classes = (
+        Class.query.filter(Class.is_deleted.is_(False))
+        .order_by(Class.grade_level, Class.name)
+        .all()
+    )
+    teachers = _teacher_choices()
+    rows = []
+    for c in _source_classes(source_year_id):
+        is_graduating = c.grade_level == _GRADUATE_GRADE
+        default = None if is_graduating else _default_target_class(c, all_classes)
+        rows.append(
+            {
+                "source_class": c,
+                "is_graduating": is_graduating,
+                "default_target_id": default.id if default else None,
+            }
+        )
+    return rows, all_classes, teachers
+
+
+def _target_candidates(source_year_id):
+    """Eligible target years: existing, not active, not deleted, no
+    enrollments yet (idempotency-friendly)."""
+    from .. import db
+    from sqlalchemy import func
+
+    years = (
+        AcademicYear.query.filter(
+            AcademicYear.is_active.is_(False),
+            AcademicYear.is_deleted.is_(False),
+            AcademicYear.id != source_year_id,
+        )
+        .order_by(AcademicYear.start_date.desc())
+        .all()
+    )
+    candidates = []
+    for ay in years:
+        count = (
+            db.session.query(func.count(ClassEnrollment.id))
+            .filter(ClassEnrollment.academic_year_id == ay.id)
+            .scalar()
+            or 0
+        )
+        if count == 0:
+            candidates.append(ay)
+    return candidates
+
+
+@bp.route("/rollover", methods=["GET", "POST"])
+@login_required
+@role_required("admin")
+def rollover():
+    from .. import db
+
+    source = current_academic_year()
+    if source is None:
+        return hx_render(
+            "academic_years/rollover.html",
+            error="Belum ada tahun ajaran aktif.",
+        )
+
+    rows, all_classes, teachers = _build_rows(source.id)
+    candidates = _target_candidates(source.id)
+
+    form = RolloverForm()
+    form.target_year_id.choices = [(ay.id, ay.year) for ay in candidates]
+
+    context = {
+        "form": form,
+        "source": source,
+        "rows": rows,
+        "all_classes": all_classes,
+        "teachers": teachers,
+        "graduate_grade": _GRADUATE_GRADE,
+        "candidates": candidates,
+    }
+
+    if request.method == "GET":
+        return hx_render("academic_years/rollover.html", **context)
+
+    # --- POST: validate + commit. ---
+    if not candidates:
+        context["error"] = "Tidak ada tahun ajaran tujuan yang tersedia."
+        return hx_render("academic_years/rollover.html", **context)
+
+    if not form.validate_on_submit():
+        return hx_render("academic_years/rollover.html", **context)
+
+    # Build the class_map from the submitted per-row selects; graduating
+    # rows are excluded (they have no target).
+    class_map = {}
+    missing = []
+    for row in rows:
+        c = row["source_class"]
+        if c.grade_level == _GRADUATE_GRADE:
+            continue
+        tgt = request.form.get(f"target-{c.id}", type=int)
+        teacher = request.form.get(f"teacher-{c.id}", type=int)
+        if not tgt or not teacher:
+            missing.append(c.name)
+        else:
+            class_map[c.id] = (tgt, teacher)
+
+    if missing:
+        context["error"] = (
+            "Baris berikut belum punya kelas tujuan / wali kelas: "
+            + ", ".join(missing)
+            + "."
+        )
+        return hx_render("academic_years/rollover.html", **context)
+
+    try:
+        result = promote_academic_year(
+            source_year_id=source.id,
+            target_year_id=form.target_year_id.data,
+            class_map=class_map,
+            session=db.session,
+        )
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        context["error"] = str(exc)
+        return hx_render("academic_years/rollover.html", **context)
+
+    target_year = db.get_or_404(AcademicYear, form.target_year_id.data)
+    return hx_render(
+        "academic_years/rollover.html",
+        form=form,
+        source=db.session.get(AcademicYear, source.id),
+        target=target_year,
+        rows=rows,
+        all_classes=all_classes,
+        teachers=teachers,
+        graduate_grade=_GRADUATE_GRADE,
+        candidates=candidates,
+        result=result,
+        success=(
+            f"Rollover selesai. Lulus: {len(result['graduated'])}, "
+            f"Naik kelas: {len(result['promoted'])}, "
+            f"Dilewati: {len(result['skipped'])}."
+        ),
     )
