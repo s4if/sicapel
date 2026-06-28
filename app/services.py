@@ -82,6 +82,12 @@ def recompute_summary(student_id, session) -> StudentPointSummary:
     ``current_sp_level`` / ``last_sp_date`` are managed by
     ``record_violation`` / ``apply_amnesty`` (and the ``sp_reset`` flag) and
     are preserved here; replaying SP escalation from history is a T18 concern.
+
+    ``student.status`` is reconciled with ``is_expelled``: a non-void
+    expulsion forces ``status = "expelled"``; the absence of one restores
+    an expelled student to ``"active"`` (graduated/transferred are never
+    overwritten). This closes the void/recover drift where voiding an
+    expulsion flipped the summary but left ``student.status`` stale.
     """
     violation_total = session.scalar(
         select(func.coalesce(func.sum(ViolationRecord.points), 0))
@@ -115,6 +121,14 @@ def recompute_summary(student_id, session) -> StudentPointSummary:
     else:
         summary.total_points = violation_total - amnesty_total
         summary.is_expelled = is_expelled
+
+    student = session.get(Student, student_id)
+    if student is not None:
+        if is_expelled and student.status != "expelled":
+            student.status = "expelled"
+        elif not is_expelled and student.status == "expelled":
+            student.status = "active"
+
     session.flush()
     return summary
 

@@ -441,7 +441,7 @@ Composite UNIQUE constraints on `(academic_year_id, letter_seq)` per letter tabl
 |---|---|---|
 | D1 | HTMX scope | **Full Pattern1** — `hx-boost` on `<body>`, render-to-destination for all in-content mutations, dual-mode headers on every page. Graceful no-JS fallback. |
 | D2 | Route organization | **Blueprint per entity** with `url_prefix`, registered in `create_app()`. |
-| D3 | Auth | **Flask-Login** + Pattern1-style decorators wrapping it: `@role_required(...)`, `@class_owned_required`. Auth decorators always sit **outermost**. |
+| D3 | Auth | **Flask-Login** + Pattern1-style decorators wrapping it: `@role_required(...)`. Wali-kelas class ownership is enforced at the **query layer** via `scope_students_to_role()` (§6.3), not a per-route decorator. Auth decorators always sit **outermost**. |
 | D4 | List rendering | **jQuery DataTables** with per-blueprint `/data` JSON endpoint + destroy-guard IIFE on every list page. Bootstrap-Flask helpers are **not** used for lists. |
 | D5 | Form rendering | **Inline Bootstrap markup** (`is-invalid` + `invalid-feedback` idiom), **not** Bootstrap-Flask `render_form`. |
 | D6 | Notifications | `render_notif` macro via `hx_render(error=, success=, info=)` kwargs. **Do not use `flash()`.** |
@@ -702,24 +702,24 @@ def role_required(*roles):
     return decorator
 
 
-def class_owned_required(view):
-    """For wali_kelas: target student must be in their class.
-    admin & guru_bk bypass."""
-    @functools.wraps(view)
-    def wrapped(student_id, **kwargs):
-        if current_user.role == "wali_kelas":
-            from .models import Student
-            s = Student.query.get_or_404(student_id)
-            if s.class_.homeroom_teacher_id != current_user.id:
-                return hx_render("errors/403.html"), 403
-        return view(student_id=student_id, **kwargs)
-    return wrapped
-
-
 def current_academic_year():
     """Helper: return the academic_year with is_active=True."""
     from .models import AcademicYear
     return AcademicYear.query.filter_by(is_active=True).first()
+
+def scope_students_to_role(query):
+    """Restrict a Student query to the current user's class when they are
+    a wali_kelas (§1.1). admin / guru_bk are returned unscoped.
+
+    This is the single enforcement point for wali-kelas class ownership —
+    it replaces the per-route @class_owned_required decorator originally
+    sketched in early drafts. R12-safe: joins Class explicitly."""
+    if current_user.role == "wali_kelas":
+        from .models import Class, Student
+        query = query.join(Class, Student.class_id == Class.id).filter(
+            Class.homeroom_teacher_id == current_user.id
+        )
+    return query
 ```
 
 ---
@@ -869,8 +869,8 @@ Each entity blueprint follows the same skeleton. Auth decorator sits **outermost
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 
-from ..helper import (role_required, class_owned_required, hx_render,
-                      sanitize, current_academic_year)
+from ..helper import (role_required, hx_render,
+                      sanitize, current_academic_year, scope_students_to_role)
 from ..models import db, ViolationRecord, Student, ViolationType
 from ..forms import ViolationRecordForm
 from ..services import record_violation
@@ -1243,7 +1243,7 @@ Render each PDF template with a sample object; assert non-empty bytes + magic he
 | **T1** | **Scaffold.** `uv init` + create `app/` package + `uv add flask flask-sqlalchemy flask-wtf flask-login flask-htmx python-dotenv weasyprint psycopg[binary] pillow python-magic` + `uv add --group dev pytest factory-boy ruff`. Then `app/__init__.py` factory (`create_app` + instance folder per §7.1), `app/helper.py` (htmx + hx_render + sanitize + role decorators stub), `pyproject.toml` + `uv.lock`, `.flaskenv` (`FLASK_APP=app`), `.env.example`, `.gitignore` (must include `instance/`), `/healthcheck` route. **Verify:** `uv run flask run --debug` starts and `/healthcheck` returns 200. | — |
 | **T2** | `models.py` (13 models per §2, incl. `ClassEnrollment`) + `uv run flask db init/migrate/upgrade`; smoke-test schema on both SQLite and an empty PostgreSQL. | T1 |
 | **T3** | `app/seed.py` exposed as Flask CLI command (`seed_cli`, registered in `create_app`): 4 `violation_categories`, 1 admin user, sample `violation_types`, 1 active `academic_year`. Run via `uv run flask seed`. | T2 |
-| **T4** | `auth.py` blueprint + Flask-Login wiring + `@role_required` + `@class_owned_required`. | T1, T2 |
+| **T4** | `auth.py` blueprint + Flask-Login wiring + `@role_required` + `scope_students_to_role()` query helper for wali-kelas class ownership. | T1, T2 |
 | **T5** | `base.html` + `macros.html` + nav partial + dual-mode header convention. | T4 |
 | **T6** | **`services.record_violation`** + `test_services.py` (7 cases). | T2 |
 | **T7** | `services.apply_amnesty` + `services.recompute_summary` + `test_apply_amnesty.py`. | T6 |
@@ -1288,7 +1288,7 @@ phase, tasks **CM1–CM7**, defined in full in
 | WeasyPrint system deps missing | Document `apt-get install libpango-1.0-0 libpangoft2-1.0-0 libcairo2 gir1.2-rsvg-2.0` in README; gate PDF tests with `pytest.importorskip("weasyprint")`. |
 | Letter-numbering collision on simultaneous commit | The `UNIQUE(academic_year_id, letter_seq)` constraint (§2.13) makes duplicate seqs impossible to persist — corruption cannot occur. The residual risk is a rare user-visible error on a truly simultaneous commit (two Guru BK issuing letters in the same millisecond), which rolls back the loser's transaction; the user retries. Acceptable for v1's small user set; see §8.3. |
 | `Cannot reinitialise DataTable` after HTMX re-swap | Destroy-guard IIFE is mandatory (R11); consider a ruff grep check that every init is guarded. |
-| Wali kelas accessing students outside their class | Centralize scoping in `_student_choices()` + `@class_owned_required` decorator; per-endpoint RBAC integration tests. |
+| Wali kelas accessing students outside their class | Centralize scoping in `scope_students_to_role()` query helper (applied in `_student_choices()` and every list/detail query); per-endpoint RBAC integration tests. |
 | `student_point_summaries` drift from source of truth | `recompute_summary()` helper as backstop; consider a nightly job. |
 | Upload abuse (MIME spoofing, large files) | `MAX_CONTENT_LENGTH` + MIME whitelist via `python-magic` + Pillow decode-test for photos + UUID path strategy. |
 | Enum migration behavior differs SQLite vs PostgreSQL | Run `uv run flask db upgrade` against an empty PostgreSQL periodically from T2 onward as a smoke test. |
