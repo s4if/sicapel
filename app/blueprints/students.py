@@ -69,20 +69,25 @@ def _row_actions(student):
     edit_url = f"{student.id}/edit"
     detail_url = f"{student.id}"
     delete_url = f"{student.id}/delete"
-    return (
+    can_manage = current_user.role in ("admin", "guru_bk")
+    buttons = (
         f'<div class="btn-group btn-group-sm">'
         f'<a class="btn btn-outline-info" href="{detail_url}" '
         f'hx-get="{detail_url}" hx-target="#hx_content" hx-swap="innerHTML">'
         f'<i class="bi bi-eye"></i></a>'
-        f'<a class="btn btn-outline-primary" href="{edit_url}" '
-        f'hx-get="{edit_url}" hx-target="#hx_content" hx-swap="innerHTML">'
-        f'<i class="bi bi-pencil"></i></a>'
-        f'<button class="btn btn-outline-danger" type="button" '
-        f'onclick="hapus_data(this)" '
-        f'data-url="{delete_url}" data-nama="{nama}">'
-        f'<i class="bi bi-trash"></i></button>'
-        f"</div>"
     )
+    if can_manage:
+        buttons += (
+            f'<a class="btn btn-outline-primary" href="{edit_url}" '
+            f'hx-get="{edit_url}" hx-target="#hx_content" hx-swap="innerHTML">'
+            f'<i class="bi bi-pencil"></i></a>'
+            f'<button class="btn btn-outline-danger" type="button" '
+            f'onclick="hapus_data(this)" '
+            f'data-url="{delete_url}" data-nama="{nama}">'
+            f'<i class="bi bi-trash"></i></button>'
+        )
+    buttons += "</div>"
+    return buttons
 
 
 @bp.route("/")
@@ -97,6 +102,10 @@ def index():
 @role_required("admin", "guru_bk", "wali_kelas")
 def data():
     q = _base_query()
+    # Hide soft-deleted entities for non-admins: only admins see the trash
+    # bin (so they can restore). guru_bk / wali_kelas never see deleted rows.
+    if current_user.role != "admin":
+        q = q.filter(Student.is_deleted.is_(False))
     rows = []
     for i, s in enumerate(q.order_by(Student.created_at.desc()).all(), 1):
         summary = StudentPointSummary.query.filter_by(student_id=s.id).first()
@@ -173,6 +182,11 @@ def detail(id):
         )
     else:
         student = db.get_or_404(Student, id)
+
+    # Hide soft-deleted entities for non-admins: a deleted student is invisible
+    # (404) to guru_bk / wali_kelas. Only admins may view retired records.
+    if student.is_deleted and current_user.role != "admin":
+        return hx_render("errors/404.html"), 404
 
     summary = StudentPointSummary.query.filter_by(student_id=id).first()
     return hx_render("students/detail.html", student=student, summary=summary)
@@ -253,7 +267,7 @@ def delete(id):
 
 @bp.route("/<int:id>/restore", methods=["POST"])
 @login_required
-@role_required("admin", "guru_bk")
+@role_required("admin")
 def restore(id):
     from .. import db
 

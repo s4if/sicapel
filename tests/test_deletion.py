@@ -362,3 +362,73 @@ def test_data_table_shows_deleted_rows_with_flag(client, admin, violation_setup)
     matched = [r for r in rows if r["name"] == "Disembunyikan"]
     assert matched
     assert matched[0]["is_deleted"] is True
+
+
+# ---------------------------------------------------------------------------
+# Hide soft-deleted entities for non-admins
+# ---------------------------------------------------------------------------
+def test_admin_data_includes_deleted(client, admin, violation_setup):
+    from tests.conftest import make_student
+
+    s = make_student(
+        violation_setup.student.class_id, "9101", name="Hanya Admin"
+    )
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "admin@example.com")
+    rows = client.get("/siswa/data").get_json()["data"]
+    assert any(r["name"] == "Hanya Admin" for r in rows)
+
+
+def test_non_admin_data_excludes_deleted(client, guru_bk, violation_setup):
+    from tests.conftest import make_student
+
+    s = make_student(
+        violation_setup.student.class_id, "9102", name="Sembunyi Guru"
+    )
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "gurubk@example.com")
+    rows = client.get("/siswa/data").get_json()["data"]
+    assert all(r["name"] != "Sembunyi Guru" for r in rows)
+
+
+def test_wali_kelas_data_excludes_deleted(client, violation_setup):
+    from tests.conftest import make_class, make_student, make_user
+
+    wk = make_user("wali_kelas", "wkhide@example.com", name="Wali Hide")
+    cls = make_class(wk.id, "X WK")
+    s = make_student(cls.id, "9103", name="Sembunyi Wali")
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "wkhide@example.com")
+    rows = client.get("/siswa/data").get_json()["data"]
+    assert all(r["name"] != "Sembunyi Wali" for r in rows)
+
+
+def test_non_admin_student_detail_404_when_deleted(client, guru_bk, violation_setup):
+    s = violation_setup.student
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "gurubk@example.com")
+    resp = client.get(f"/siswa/{s.id}")
+    assert resp.status_code == 404
+
+
+def test_admin_can_view_deleted_student_detail(client, admin, violation_setup):
+    s = violation_setup.student
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "admin@example.com")
+    resp = client.get(f"/siswa/{s.id}")
+    assert resp.status_code == 200
+
+
+def test_restore_is_admin_only(client, guru_bk, violation_setup):
+    s = violation_setup.student
+    s.is_deleted = True
+    db.session.commit()
+    login(client, "gurubk@example.com")
+    resp = client.post(f"/siswa/{s.id}/restore")
+    assert resp.status_code == 403
+    assert s.is_deleted is True

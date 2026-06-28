@@ -323,13 +323,13 @@ def _row_actions(obj):
     )
 ```
 
-### 4. `data()` — show all rows, flag deleted ones
+### 4. `data()` — show all rows, flag deleted ones (admins only)
 
-The query returns **all** rows (no `is_deleted` filter) so admins can see and
-restore deleted records. Each JSON row carries `"is_deleted": obj.is_deleted`;
-the DataTables `createdRow` callback (§"Template Changes") styles it. This
-mirrors the existing `alert` boolean + `createdRow` technique already used in
-`dashboard.py:141`.
+The query returns **all** rows (no `is_deleted` filter) **for admins** so they
+can see and restore deleted records. Each JSON row carries
+`"is_deleted": obj.is_deleted`; the DataTables `createdRow` callback
+(§"Template Changes") styles it. This mirrors the existing `alert` boolean +
+`createdRow` technique already used in `dashboard.py:141`.
 
 ```python
 rows.append({
@@ -341,7 +341,29 @@ rows.append({
 
 For `students.data()` specifically, keep the existing `_base_query()` role
 scoping; `is_deleted` visibility is **on top of** it (a `wali_kelas` still only
-sees their own class's students, deleted or not).
+sees their own class's students).
+
+#### Hide soft-deleted entities for non-admins
+
+Non-admin roles (`guru_bk`, `wali_kelas`) never see soft-deleted entities —
+only admins own the "trash bin" (view + restore). This is an additional,
+role-aware rule layered on top of invariant I2:
+
+- **`students.data()`**: when `current_user.role != "admin"`, add
+  `Student.is_deleted.is_(False)`. Admins still see every row (deleted ones
+  carry the restore button via `_row_actions`).
+- **`students.detail()`**: after loading, a soft-deleted student returns 404
+  for non-admins (`student.is_deleted and current_user.role != "admin"`).
+- **`students.restore()`**: restricted to `admin`-only, since the restore
+  button only renders on deleted rows, which non-admins can no longer see.
+  (`delete` stays `admin, guru_bk` — a `guru_bk` may still retire a student;
+  it then becomes admin-managed trash.)
+- The other 4 entities (`classes`, `users`, `academic_years`,
+  `violation_types`) are already `admin`-only across all their routes, so the
+  clause is trivially satisfied there. The `dashboard` ranking and
+  `by_class`/`*_choices` live-selection paths already exclude `is_deleted`
+  for everyone (§"Read-path audit"), so non-admins never encounter a deleted
+  entity in any operational read path.
 
 ---
 
@@ -489,7 +511,7 @@ guard (§"Session invalidation") — the login guard stops *new* sessions, the
 | 1 | `app/models.py` | Add `is_deleted` to **all 5** models (incl. `ViolationType`) |
 | 2 | `migrations/` (new) + `alembic.ini` (new) | `flask db init` (prerequisite), then one migration for the 5 columns |
 | 3 | `app/__init__.py` | `before_request` deleted-user session guard (I5) |
-| 4 | `app/blueprints/students.py` | +delete, +restore; `_row_actions`; `data()` `is_deleted` flag; `_class_choices` filter |
+| 4 | `app/blueprints/students.py` | +delete, +restore (admin-only); `_row_actions`; `data()` `is_deleted` flag + hide-deleted-for-non-admin; `detail()` 404 for non-admin; `_class_choices` filter |
 | 5 | `app/blueprints/classes.py` | +delete, +restore; `_row_actions`; `data()` flag; `_teacher_choices` filter |
 | 6 | `app/blueprints/users.py` | +delete (+self/last-admin guards I4), +restore; `_row_actions`; `data()` flag |
 | 7 | `app/blueprints/academic_years.py` | +delete (+active-year guard I3), +restore; `_row_actions`; `data()` flag |
@@ -548,6 +570,16 @@ The repo has strong test conventions (`tests/test_*.py`, fixtures in
 - `test_dashboard_excludes_deleted_student` — deleted student absent from
   stats/ranking.
 - `test_by_class_excludes_deleted`.
+
+**Hide soft-deleted entities for non-admins**
+
+- `test_non_admin_data_excludes_deleted` — `guru_bk`/`wali_kelas` `data()`
+  omits deleted students; admin `data()` still includes them.
+- `test_admin_data_includes_deleted` — admin still sees deleted rows.
+- `test_non_admin_student_detail_404_when_deleted` — non-admin gets 404 on a
+  deleted student's detail page.
+- `test_admin_can_view_deleted_student_detail` — admin sees it.
+- `test_restore_is_admin_only` — `guru_bk` POST to restore → 403.
 
 **Display correctness**
 

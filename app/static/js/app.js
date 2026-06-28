@@ -97,6 +97,17 @@
     body.appendChild(document.createTextNode(suffix || ""));
   };
 
+  /* Make HTMX swap 4xx/5xx bodies so server-side error pages (403/404/500)
+   * actually render into #hx_content instead of being silently dropped —
+   * HTMX only swaps 2xx/3xx by default. */
+  document.body.addEventListener("htmx:beforeSwap", function (evt) {
+    var status = evt.detail.xhr.status;
+    if (status === 403 || status === 404 || status >= 500) {
+      evt.detail.shouldSwap = true;
+      evt.detail.target = document.getElementById("hx_content");
+    }
+  });
+
   /* Re-sync after HTMX content swaps. */
   document.body.addEventListener("htmx:afterSettle", syncSidebarActive);
 })();
